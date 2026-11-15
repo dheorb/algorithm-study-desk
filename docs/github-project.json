@@ -1,0 +1,19 @@
+{
+  "repository": "dheorb/algorithm-study-desk",
+  "owner": "dheorb",
+  "number": 1,
+  "url": "https://github.com/users/dheorb/projects/1",
+  "id": "PVT_kwHOBalKo84Brw24",
+  "fields": {
+    "status": "PVTSSF_lAHOBalKo84Brw24zhqCABE",
+    "agent": "PVTF_lAHOBalKo84Brw24zhqCAPU",
+    "nextAction": "PVTF_lAHOBalKo84Brw24zhqCAQU"
+  },
+  "statuses": {
+    "todo": { "name": "Todo", "label": "status:todo", "id": "f75ad846" },
+    "in-progress": { "name": "In Progress", "label": "status:in-progress", "id": "47fc9ee4" },
+    "review": { "name": "Review", "label": "status:review", "id": "5eb85ba6" },
+    "blocked": { "name": "Blocked", "label": "status:blocked", "id": "b1fb4951" },
+    "done": { "name": "Done", "label": "status:done", "id": "98236657" }
+  }
+}
