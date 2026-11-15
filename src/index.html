@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <title>Algorithm Study Desk · 데이터분석</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="renderer.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header class="masthead">
+        <div class="brand"><span class="mark" aria-hidden="true">A</span><span>Algorithm Study Desk</span></div>
+        <span class="local-badge">내 컴퓨터에 보관</span>
+      </header>
+      <section class="problem" aria-labelledby="problem-title">
+        <div><p class="eyebrow">나의 첫 번째 학습 기록</p><h1 id="problem-title">데이터분석</h1><p class="description">코드를 다듬고, 생각의 과정을 남겨 보세요.</p></div>
+        <span class="language">C++ 연습</span>
+      </section>
+      <section class="editors" aria-label="학습 내용 편집">
+        <div class="editor-panel code-panel">
+          <div class="panel-heading"><label for="code">풀이 코드</label><span>C++</span></div>
+          <textarea id="code" spellcheck="false" aria-describedby="sample-note" disabled></textarea>
+          <p class="panel-footer" id="sample-note">개인 학습 샘플 · 정답 통과 여부는 확인되지 않았습니다.</p>
+        </div>
+        <div class="editor-panel notes-panel">
+          <div class="panel-heading"><label for="notes">생각해볼점</label><span>메모</span></div>
+          <textarea id="notes" placeholder="어디서 막혔나요?&#10;다른 방법은 없을까요?&#10;&#10;다음에 다시 볼 나를 위해 남겨 주세요." disabled></textarea>
+          <p class="panel-footer">아이디어, 어려웠던 부분, 다음에 시도할 방법</p>
+        </div>
+      </section>
+      <footer class="save-area">
+        <div class="save-feedback"><p id="status" role="status" aria-live="polite" data-state="loading">기록을 불러오는 중…</p><p id="saved-at">저장한 기록은 앱을 다시 열어도 이어집니다.</p></div>
+        <button id="save" type="button" disabled>저장 <kbd>Ctrl S</kbd></button>
+      </footer>
+      <details class="storage-details"><summary>기록 보관 위치</summary><p id="storage-path"></p><p>저장 파일을 직접 수정하려면 앱을 먼저 닫아 주세요. 이전 저장 내용은 .bak 파일에 보관됩니다.</p></details>
+    </main>
+  </body>
+</html>
