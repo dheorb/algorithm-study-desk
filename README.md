@@ -19,7 +19,7 @@
 ## 팀의 작업 진행 보기
 
 - [작업 목록](https://github.com/dheorb/algorithm-study-desk/issues): 요구사항, 완료 조건, 담당 역할과 진행 보고.
-- [작업 보드](https://github.com/dheorb/algorithm-study-desk/projects): 대기·진행 중·검토 중·막힘·완료 상태.
+- [작업 보드](https://github.com/users/dheorb/projects/1): 대기·진행 중·검토 중·막힘·완료 상태, 담당 역할과 다음 행동.
 - [검토할 변경](https://github.com/dheorb/algorithm-study-desk/pulls): 코드 차이, 테스트와 독립 검토 결과.
 - [팀 운영 규칙](docs/team-workflow.md): Issue를 먼저 기록하고 배정하는 절차와 상태 변경 책임.
 

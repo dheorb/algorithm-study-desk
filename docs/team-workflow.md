@@ -4,6 +4,8 @@
 
 저장소: https://github.com/dheorb/algorithm-study-desk
 
+작업 보드: https://github.com/users/dheorb/projects/1
+
 - **Issue**: 요구사항, 작업 범위, 완료 조건, 구현 주담당과 검토 담당, 선행 작업, 현재 상태.
 - **Projects**: 사용자가 보는 작업 보드. 상태와 담당 역할, 연결된 PR을 표시한다.
 - **PR**: 코드 변경, 검증 근거, 독립 검토와 수정 과정.
@@ -40,6 +42,17 @@ GitHub와 Orca는 대화 내용을 자동으로 공유하지 않는다. 총괄�
 
 보드 동기화에 실패하면 Issue 댓글에 실제 상태·실패 원인·다음 행동을 남기고 해결 후 보드를 맞춘다. 확인하지 못한 상태를 성공으로 표시하지 않는다. GitHub에 작업 정의를 기록하지 못하면 새 구현을 배정하지 않는다. 작업 중 일시 장애가 생기면 현재 로컬 변경을 보존하고 보고한다.
 
+### 보드 갱신 방법
+
+공개된 프로젝트·필드·상태 ID는 [github-project.json](github-project.json)에 있다. 인증정보가 아니며, 보드를 다시 만들거나 옵션을 바꾸면 실제 API 값으로 갱신한다. GitHub CLI의 `project` 권한이 필요하다.
+
+1. `gh project item-add 1 --owner dheorb --url <Issue 또는 PR URL> --format json`으로 추가하고 반환된 item `id`를 사용한다. 이미 있는 항목인지 확실하지 않으면 먼저 `gh project item-list 1 --owner dheorb --format json`으로 확인한다.
+2. `gh project item-edit --project-id <project id> --id <item id> --field-id <status field id> --single-select-option-id <status option id>`로 상태를 지정한다.
+3. 같은 `item-edit`에서 `--field-id`에 담당 또는 다음 행동 필드 ID를 넣고 `--text`로 내용을 갱신한다.
+4. Issue의 기존 `status:*` 라벨만 교체하고, 보드의 실제 상태를 다시 읽어 확인한다. PR을 별도 카드로 추가했으면 그 카드도 갱신한다.
+
+GitHub Projects의 내장 이벤트 자동화만으로 에이전트 배정·시작·막힘을 알 수는 없다. 이 구성에서는 총괄의 보고 처리 단계가 상태 동기화를 수행한다. 보드 카드의 담당 역할·다음 행동과 연결된 PR을 사용자가 직접 볼 수 있다.
+
 ## 에이전트 역할과 GitHub 계정
 
 현재 GitHub 사용자 계정은 `dheorb`를 사용한다. 에이전트의 이름은 별도 GitHub 사용자 계정이 아니다. Issue의 담당 역할, 보드의 담당 필드, 브랜치와 PR 설명으로 역할을 구분한다.
@@ -49,6 +62,8 @@ GitHub와 Orca는 대화 내용을 자동으로 공유하지 않는다. 총괄�
 ## 자동 검증과 병합
 
 GitHub Actions의 필수 확인은 `unit-tests`다. Linux Node 22에서 `npm ci` 후 `npm test`를 실행하며 저장 계층만 검증한다. Electron 화면·프로세스 재시작·한글 입력까지 검증했다고 보고하지 않는다. UI·저장 동작에 영향을 주는 변경은 PR에서 해당 통합·수동 검증 근거를 추가한다.
+
+main 보호 규칙은 PR 경유, 최신 main 기준 `unit-tests` 통과, 검토 대화 해결을 요구한다. 관리자에게도 적용하며 강제 푸시와 브랜치 삭제를 허용하지 않는다. 정식 승인 수는 0으로 두되 독립 에이전트의 검토 근거는 위 운영 규칙으로 확인한다. 계정·서비스 제한으로 CI가 실행되지 못한 경우도 통과로 취급하지 않는다.
 
 총괄은 보고에 적힌 커밋이 PR의 최신 head와 같은지 확인한 뒤 병합한다. PR이 Issue의 모든 완료 조건을 충족하면 `Closes #번호`로 연결해 main 병합 시 종료할 수 있다. 일부만 해결하면 `Refs #번호`로 연결하고 Issue를 열어 둔다. 병합 직후 Issue·보드가 실제로 완료됐는지 확인한다.
 
