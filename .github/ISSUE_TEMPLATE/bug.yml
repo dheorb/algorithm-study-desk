@@ -1,0 +1,30 @@
+name: 오류 수정
+description: 재현 방법과 정상 동작, 검증 조건을 기록합니다.
+title: "[오류] "
+labels: ["type:bug", "status:todo"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 발생한 문제와 기대한 동작
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 재현 단계와 실행 환경
+      description: 실제 학습 기록이나 인증정보가 포함된 로그는 올리지 않습니다.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 수정 범위와 완료 조건
+      value: "포함:\n- \n\n범위 밖:\n- \n\n완료 조건:\n- [ ] 재현 사례에서 정상 동작을 확인한다.\n- [ ] 관련 기존 동작의 회귀 여부를 확인한다."
+    validations:
+      required: true
+  - type: textarea
+    id: owner
+    attributes:
+      label: 담당·선행 작업·현재 상태
+      value: "구현 주담당: 미배정\n검토 담당: 미배정\n선행 작업: 없음\n상태: 대기"
