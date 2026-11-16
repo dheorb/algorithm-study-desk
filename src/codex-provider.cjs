@@ -51,19 +51,25 @@ class ProviderError extends Error {
 }
 function runProcess(binary, args, { input = '', signal, timeout = 60000, cwd, env, spawnProcess = spawn } = {}) {
   return new Promise((resolve, reject) => {
-    let child, reason, output = '', size = 0, killTimer;
+    let child, reason, result, output = '', size = 0;
     const stop = code => {
       reason ||= code;
-      if (child?.pid) {
-        try { process.kill(-child.pid, 'SIGTERM'); } catch { child.kill('SIGTERM'); }
-        killTimer ||= setTimeout(() => { try { process.kill(-child.pid, 'SIGKILL'); } catch {} }, 500);
-      }
+      if (child?.connected) child.send({ type: 'stop', reason }, () => {});
     };
-    // A separate deadline also survives an abrupt Electron main-process death.
-    // Linux coreutils timeout is required; never fall back to an unbounded child.
-    try { child = spawnProcess('/usr/bin/timeout', ['--signal=TERM', '--kill-after=1s', `${timeout / 1000}s`, binary, ...args], { cwd, env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] }); }
+    // Use the bundled Node/Electron runtime as a dedicated supervisor. Its own
+    // deadline and IPC-disconnect cleanup survive an abrupt caller death.
+    // ELECTRON_RUN_AS_NODE applies only to this helper, never to the Codex child.
+    try { child = spawnProcess(process.execPath, [path.join(__dirname, 'process-supervisor.cjs')], {
+      env: { ...(env || process.env), ELECTRON_RUN_AS_NODE: '1' }, detached: true,
+      stdio: ['pipe', 'pipe', 'pipe', 'ipc']
+    }); }
     catch { reject(new ProviderError('unavailable')); return; }
     const timer = setTimeout(() => stop('timeout'), timeout);
+    child.on('message', message => {
+      if (message?.type !== 'result' || result) return;
+      result = message;
+      clearTimeout(timer); // The supervisor now owns the fixed 500ms cleanup grace.
+    });
     const abort = () => stop('cancelled');
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) abort();
@@ -77,11 +83,12 @@ function runProcess(binary, args, { input = '', signal, timeout = 60000, cwd, en
     });
     // Never keep or surface raw stderr (it can contain private diagnostics).
     child.stderr.on('data', chunk => { size += chunk.length; if (size > MAX_OUTPUT) stop('output'); });
-    child.on('close', code => {
-      clearTimeout(timer); clearTimeout(killTimer); signal?.removeEventListener('abort', abort);
-      if (reason || code !== 0) reject(new ProviderError(reason || ([126, 127].includes(code) ? 'unavailable' : [124, 137].includes(code) ? 'timeout' : 'connection')));
+    child.on('close', () => {
+      clearTimeout(timer); signal?.removeEventListener('abort', abort);
+      if (reason || result?.reason || !result || result.code !== 0) reject(new ProviderError(reason || result?.reason || 'unavailable'));
       else resolve(output);
     });
+    child.send({ type: 'start', binary, args, cwd, env: env || process.env, deadline: Date.now() + timeout }, () => {});
     child.stdin.end(input);
   });
 }

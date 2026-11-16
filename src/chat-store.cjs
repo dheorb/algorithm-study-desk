@@ -39,19 +39,23 @@ class ChatStore extends StudyStore {
     this.baseline = raw;
     this.loaded = true;
   }
+  prepare(entry) {
+    validate(entry);
+    const entries = structuredClone(this.entries);
+    const index = entries.findIndex(item => item.id === entry.id);
+    if (index >= 0 && (entries[index].problemId !== entry.problemId || entries[index].question !== entry.question)) throw new Error('identity');
+    if (index >= 0) entries[index] = structuredClone(entry); else entries.push(structuredClone(entry));
+    if (entries.length > 1000 || entries.filter(item => item.problemId === entry.problemId).length > 200) throw new Error('limit');
+    const raw = Buffer.from(JSON.stringify({ schemaVersion: 1, entries }, null, 2) + '\n');
+    if (raw.length > MAX_CHAT_FILE) throw new Error('limit');
+    return { entries, raw };
+  }
   async put(entry) {
     if (!this.loaded || this.saving) throw new Error('unavailable');
-    validate(entry);
+    const { entries, raw } = this.prepare(entry);
     this.saving = true;
     let temporary, backup;
     try {
-      const entries = structuredClone(this.entries);
-      const index = entries.findIndex(item => item.id === entry.id);
-      if (index >= 0 && (entries[index].problemId !== entry.problemId || entries[index].question !== entry.question)) throw new Error('identity');
-      if (index >= 0) entries[index] = structuredClone(entry); else entries.push(structuredClone(entry));
-      if (entries.length > 1000 || entries.filter(item => item.problemId === entry.problemId).length > 200) throw new Error('limit');
-      const raw = Buffer.from(JSON.stringify({ schemaVersion: 1, entries }, null, 2) + '\n');
-      if (raw.length > MAX_CHAT_FILE) throw new Error('limit');
       await this.assertUnchanged();
       temporary = await this.writeTemporary(this.filePath, raw);
       if (this.baseline !== null) backup = await this.writeTemporary(this.backupPath, this.baseline);

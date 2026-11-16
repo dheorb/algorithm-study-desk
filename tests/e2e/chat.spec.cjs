@@ -2,6 +2,9 @@ const { test, expect, _electron: electron } = require('@playwright/test');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
+const { StudyStore } = require('../../src/store.cjs');
+const { processTree } = require('../helpers/process-tree.cjs');
 const root = path.resolve(__dirname, '../..');
 let dir, app;
 const q = page => page.locator('#chat-question');
@@ -176,3 +179,65 @@ test('unsupported CLI fails before inference and preserves the question in the a
   expect(await app.evaluate(() => global.versionCalls)).toBe(1);
   await page.screenshot({ path: info.outputPath('ai-version-blocked.png'), fullPage: true });
 });
+
+test('full A rejects without global lock or model; A draft survives B send and new-PID records stay separate', async ({}, info) => {
+  const study = new StudyStore(dir, 'sample'); await study.load(); const b = await study.create('B');
+  const entries = Array.from({ length: 200 }, (_, i) => ({ id: randomUUID(), problemId: 'data-analysis', question: `Q${i}`,
+    answer: `A${i}`, status: 'completed', error: null, createdAt: '2026-01-01T00:00:00Z', historyCount: 0, omittedHistory: 0 }));
+  const raw = JSON.stringify({ schemaVersion: 1, entries }); const file = path.join(dir, 'ai-chat.json'); await fs.writeFile(file, raw);
+  let page = await launch(); await send(page, 'A의 보존할 한도 초과 초안');
+  await expect(status(page)).toContainText('한도'); await expect(status(page)).toHaveAttribute('data-state', 'error');
+  await expect(q(page)).toHaveValue('A의 보존할 한도 초과 초안'); await expect(page.locator('#chat-cancel')).toBeHidden();
+  expect(await count()).toBe(0); expect(await fs.readFile(file, 'utf8')).toBe(raw);
+  expect((await page.evaluate(() => window.studyChat.load())).active).toBeNull();
+  await select(page, 'B'); await q(page).fill('B의 새 질문'); await expect(page.locator('#chat-send')).toBeEnabled();
+  await page.screenshot({ path: info.outputPath('quota-B-unlocked.png'), fullPage: true });
+  await page.locator('#chat-send').click(); await expect.poll(count).toBe(1); await answer(0, 'B의 저장된 답변');
+  await expect(status(page)).toContainText('저장했습니다'); await select(page, '데이터분석');
+  await expect(q(page)).toHaveValue('A의 보존할 한도 초과 초안'); await expect(page.locator('#chat-history li')).toHaveCount(200);
+  const final = JSON.parse(await fs.readFile(file)); expect(final.entries.slice(0, 200)).toEqual(entries);
+  expect(final.entries).toHaveLength(201); expect(final.entries.at(-1)).toMatchObject({ problemId: b.problemId, answer: 'B의 저장된 답변' });
+  page = await restart(true); await expect(page.locator('#chat-history li')).toHaveCount(200);
+  await select(page, 'B'); await expect(page.locator('#chat-history')).toContainText('B의 저장된 답변');
+});
+
+for (const mode of ['cancel', 'caller-death']) {
+  test(`real Electron ${mode} stops owned TERM-ignoring descendant with closed stdio`, async ({}, info) => {
+    let page = await launch(); const initialPid = app.process().pid; const tree = processTree(dir); let descendant, supervisor;
+    try {
+      await app.evaluate(({}, { root, code }) => {
+        const { spawn } = process.mainModule.require('node:child_process');
+        const { CodexProvider, runProcess, childEnvironment } = process.mainModule.require(root + '/src/codex-provider.cjs');
+        CodexProvider.prototype.answer = function(snapshot, signal) {
+          global.chatCalls.push({ snapshot });
+          return runProcess(process.execPath, ['-e', code], { signal, timeout: 5000,
+            env: { ...childEnvironment(), ELECTRON_RUN_AS_NODE: '1' },
+            spawnProcess(...args) { const child = spawn(...args); global.ownedSupervisor = child.pid; return child; }
+          });
+        };
+      }, { root, code: tree.code });
+      await send(page, '합성 프로세스 종료 확인'); await expect.poll(count).toBe(1);
+      await expect.poll(async () => { try { descendant = Number(await fs.readFile(tree.pidFile, 'utf8')); return Boolean(descendant); } catch { return false; } }).toBe(true);
+      supervisor = await app.evaluate(() => global.ownedSupervisor);
+      if (mode === 'cancel') {
+        await page.locator('#chat-cancel').click(); await expect(status(page)).toContainText('취소했습니다');
+        await expect(q(page)).toHaveValue('합성 프로세스 종료 확인');
+        await page.screenshot({ path: info.outputPath('process-cancel.png'), fullPage: true });
+      } else {
+        const exit = new Promise(resolve => app.process().once('exit', resolve)); app.process().kill('SIGKILL'); await exit;
+      }
+      await new Promise(resolve => setTimeout(resolve, 900));
+      const beat = await fs.readFile(tree.beatFile, 'utf8'); await new Promise(resolve => setTimeout(resolve, 150));
+      expect(await fs.readFile(tree.beatFile, 'utf8')).toBe(beat);
+      const stat = await fs.readFile(`/proc/${descendant}/stat`, 'utf8').catch(() => null);
+      if (stat) expect(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[0]).toBe('Z');
+      if (mode === 'caller-death') {
+        await app.close().catch(() => {}); app = null; page = await launch();
+        expect(app.process().pid).not.toBe(initialPid); await expect(status(page)).not.toContainText('응답을 기다리는 중');
+        await expect(page.locator('#chat-history')).toContainText('이전 실행에서 중단됨'); await expect(q(page)).toHaveValue('합성 프로세스 종료 확인');
+      }
+    } finally {
+      for (const pid of [descendant, supervisor]) if (pid) try { process.kill(pid, 'SIGKILL'); } catch {}
+    }
+  });
+}

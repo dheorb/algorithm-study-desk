@@ -74,6 +74,34 @@ test('start-write failure launches no model; cancel preserves question; reopened
   service.close(); assert.equal(calls[0].signal.aborted, true);
   calls[0].resolve('종료 후 응답'); await tick(); assert.equal(reopened.entries[0].answer, '');
 });
+test('full A rejects before lock/write/model, preserving bytes and allowing B; uncertain start still requires save retry', async t => {
+  const { dir, study, input } = await setup(t);
+  const b = await study.create('B');
+  const entries = Array.from({ length: 200 }, (_, i) => ({ id: randomUUID(), problemId: 'data-analysis',
+    question: `Q${i}`, answer: `A${i}`, status: 'completed', error: null,
+    createdAt: '2026-01-01T00:00:00Z', historyCount: 0, omittedHistory: 0 }));
+  const raw = JSON.stringify({ schemaVersion: 1, entries }); const file = path.join(dir, 'ai-chat.json');
+  await fs.writeFile(file, raw);
+  const store = new ChatStore(dir); let calls = 0;
+  const service = new ChatService(store, study, { answer: async () => { calls++; return 'B 답변'; } }); await service.load();
+  const a = input(); const result = await service.send(a);
+  assert.equal(result.ok, false); assert.match(result.message, /한도.*전송하지/);
+  assert.equal(service.active, null); assert.equal(service.cancel(a.id).ok, false); assert.equal(calls, 0);
+  assert.equal(await fs.readFile(file, 'utf8'), raw); assert.equal(a.question, '왜 그런가요?');
+  const sync = store.syncDirectory.bind(store); store.syncDirectory = async () => { throw new Error('after rename'); };
+  const request = { ...input(), problemId: b.problemId };
+  assert.equal((await service.send(request)).ok, true); await until(() => service.active?.phase === 'save-failed');
+  assert.equal(calls, 0); assert.equal(store.entries.at(-1).id, request.id);
+  // A start that reached rename cannot be abandoned like the preflight rejection.
+  service.cancel(request.id); await until(() => service.active?.entry.status === 'cancelled' && !service.active.flushing);
+  assert.equal(service.active.entry.id, request.id); assert.equal((await service.send(input())).ok, false);
+  store.syncDirectory = sync; service.retrySave(request.id); await until(() => !service.active);
+  assert.equal((await service.send({ ...input(), problemId: b.problemId })).ok, true);
+  await until(() => !service.active);
+  assert.equal(calls, 1); assert.equal(store.entries.length, 202);
+  assert.deepEqual(store.entries.slice(0, 200), entries);
+  assert.equal(store.entries.at(-1).answer, 'B 답변');
+});
 test('v1/v2/v3 bytes and values stay unchanged during chat writes, migrate only on study save', async t => {
   const { dir } = await setup(t);
   const savedAt = '2024-01-02T03:04:05.000Z';

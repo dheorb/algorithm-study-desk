@@ -54,9 +54,14 @@ class ChatService {
     let snapshot;
     try { snapshot = makeSnapshot(input, this.studyStore.library, this.store.entries); }
     catch (error) { return { ok: false, message: error.message }; }
-    this.active = { entry: { id: input.id, problemId: input.problemId, question: snapshot.question, answer: '',
+    const entry = { id: input.id, problemId: input.problemId, question: snapshot.question, answer: '',
       status: 'running', error: null, createdAt: new Date().toISOString(),
-      historyCount: snapshot.history.length, omittedHistory: snapshot.omittedHistory }, snapshot,
+      historyCount: snapshot.history.length, omittedHistory: snapshot.omittedHistory };
+    // Reject known capacity failures before allocating the global lock or writing anything.
+    // In-flight writes/answers still use the existing conservative save/retry contract.
+    try { this.store.prepare(entry); }
+    catch { return { ok: false, message: '대화 보관 한도(문제당 200개·전체 1,000개·8 MiB)를 넘으므로 전송하지 않았습니다. 질문 초안은 유지되며, 여유가 있는 다른 문제에서는 전송할 수 있습니다.' }; }
+    this.active = { entry, snapshot,
       phase: 'preparing', saveError: '', controller: new AbortController(), cancelled: false, next: 'start' };
     this.emit();
     void this.flush();
