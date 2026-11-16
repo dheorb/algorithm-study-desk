@@ -37,7 +37,7 @@ if (!app.requestSingleInstanceLock()) {
     const store = new StudyStore(dataDirectory, sample);
     Menu.setApplicationMenu(null);
     window = new BrowserWindow({
-      title: 'Algorithm Study Desk · 데이터분석',
+      title: 'Algorithm Study Desk',
       width: 1180, height: 820, minWidth: 740, minHeight: 600,
       backgroundColor: '#f5f3ee',
       webPreferences: {
@@ -55,6 +55,10 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('study:save', (event, draft) => {
       if (!trusted(event)) return { ok: false, message: '허용되지 않은 요청입니다.' };
       return store.save(draft);
+    });
+    ipcMain.handle('study:create', (event, title) => {
+      if (!trusted(event)) return { ok: false, message: '허용되지 않은 요청입니다.' };
+      return store.create(title);
     });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event) => event.preventDefault());
