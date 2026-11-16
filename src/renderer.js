@@ -1,4 +1,5 @@
 import { CodeEditor } from './code-editor.js';
+import { ChatPanel } from './chat-panel.js';
 const notes = document.querySelector('#notes');
 const save = document.querySelector('#save');
 const status = document.querySelector('#status');
@@ -22,6 +23,7 @@ let busy = '';
 let lastError = '';
 let saveFailed = false;
 let pendingAction = null;
+let chat;
 // Retry a post-rename failure using the returned ID, never a first-line label.
 const pendingIdeaAdds = new Map();
 const code = new CodeEditor(document.querySelector('#code'), refresh);
@@ -40,6 +42,7 @@ function showStatus(message, state) {
   status.dataset.state = state;
 }
 function refresh() {
+  chat?.renderStatus();
   const disabled = !loaded || Boolean(busy);
   save.disabled = add.disabled = newTitle.disabled = ideasToggle.disabled = ideaAdd.disabled = disabled;
   code.setLocked(disabled);
@@ -124,6 +127,7 @@ function showProblem(id, ideaId) {
   showTime();
   renderList();
   renderIdeas();
+  chat?.show(id);
   refresh();
 }
 
@@ -247,8 +251,10 @@ document.addEventListener('keydown', (event) => {
   }
 });
 window.addEventListener('beforeunload', (event) => {
-  if (isDirty() || busy || saveFailed) { event.preventDefault(); event.returnValue = ''; }
+  if (isDirty() || busy || saveFailed || chat.hasUnsaved()) { event.preventDefault(); event.returnValue = ''; }
 });
+
+chat = new ChatPanel(draft, activeProblem, () => Boolean(busy || pendingAction));
 
 (async () => {
   try {
@@ -258,6 +264,7 @@ window.addEventListener('beforeunload', (event) => {
     library = result.library;
     loaded = true;
     showProblem(library.problems[0].id);
+    await chat.load();
   } catch (error) {
     document.querySelector('#problem-title').textContent = '기록 확인 필요';
     showStatus(`기록을 열지 못했습니다 · ${error.message}`, 'error');

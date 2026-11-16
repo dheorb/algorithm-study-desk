@@ -28,7 +28,7 @@
       <div class="study">
       <section class="problem" aria-labelledby="problem-title">
         <div><p class="eyebrow">선택한 문제의 학습 기록</p><h1 id="problem-title">불러오는 중…</h1><p class="description">코드를 다듬고, 생각의 과정을 남겨 보세요.</p></div>
-        <button id="ideas-toggle" type="button" aria-expanded="false" aria-controls="ideas-panel" disabled>아이디어 열기</button>
+        <div class="panel-toggles"><button id="ideas-toggle" type="button" aria-expanded="false" aria-controls="ideas-panel" disabled>아이디어 열기</button><button id="chat-toggle" type="button" aria-expanded="false" aria-controls="chat-panel" disabled>AI 대화 열기</button></div>
       </section>
       <section class="editors" aria-label="학습 내용 편집">
         <div class="editor-panel code-panel">
@@ -57,6 +57,20 @@
           <label id="idea-label" for="idea-body">선택한 아이디어 본문</label>
           <textarea id="idea-body" placeholder="접근 방법과 떠오른 생각을 적어 보세요." disabled></textarea>
           <p id="idea-saved-at" class="panel-footer">아이디어를 선택해 주세요.</p>
+        </section>
+        <section id="chat-panel" class="editor-panel" aria-labelledby="chat-title" hidden>
+          <div class="panel-heading"><h2 id="chat-title">AI 학습 대화</h2><span>Codex</span></div>
+          <p id="chat-context"></p>
+          <details class="chat-policy"><summary>Codex에 보내는 내용과 한도</summary>
+            <p>전송 순간 이 문제의 제목·화면 코드·자유 메모·선택 아이디어의 미저장 내용과 나머지 저장된 아이디어를 고정해 보냅니다. 다른 문제·원본 폴더는 보내지 않습니다. 최근 완료 대화 최대 6쌍·24 KiB를 포함하고 오래된 대화부터 제외합니다.</p>
+            <p>질문은 4,000자, 질문과 현재 학습 내용은 합쳐 64 KiB까지입니다. 넘으면 전송하지 않습니다. 전송은 코드·메모·아이디어를 저장하지 않습니다. 문제 원문·제약·채점 결과가 없으므로 AI의 답변은 확인이 필요합니다.</p>
+            <p>질문·답변은 별도 로컬 파일에 자동 저장합니다(문제당 200개·전체 1,000개·8 MiB). 패널 닫기와 문제 이동은 질문 초안을 유지합니다. 저장 실패 답변과 보내지 않은 초안은 앱을 닫기 전에 보관해 주세요. 응답은 텍스트로만 표시하며 코드에 적용하지 않습니다.</p>
+          </details>
+          <ol id="chat-history" aria-label="이 문제의 대화 기록"></ol>
+          <label for="chat-question">Codex에게 질문</label>
+          <textarea id="chat-question" placeholder="풀이에서 막힌 점을 질문해 보세요." disabled></textarea>
+          <p id="chat-status" role="status" aria-live="polite"></p>
+          <div class="chat-actions"><button id="chat-send" type="button" disabled>질문 보내기 / 다시 보내기</button><button id="chat-cancel" type="button" hidden>현재 요청 취소</button><button id="chat-retry-save" type="button" hidden>대화 저장 재시도</button><button id="chat-reload" type="button">대화 다시 불러오기</button></div>
         </section>
       </section>
       <p id="save-scope">저장 / Ctrl+S: 현재 문제의 코드·자유 메모와 선택한 아이디어를 함께 저장합니다.</p>
