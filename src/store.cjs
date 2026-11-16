@@ -8,6 +8,8 @@ const MAX_NOTES = 256 * 1024;
 const MAX_FILE = 8 * 1024 * 1024;
 const MAX_TITLE = 120;
 const MAX_PROBLEMS = 1000;
+const MAX_IDEAS = 100;
+const MAX_IDEA_BODY = 256 * 1024;
 
 class RecordError extends Error {}
 
@@ -25,23 +27,39 @@ function normalizeTitle(title) {
   return title.trim();
 }
 
-function validId(id) {
-  return id === PROBLEM_ID || (typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id));
+function validUuid(id) {
+  return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id);
+}
+function validId(id) { return id === PROBLEM_ID || validUuid(id); }
+function validTime(value) { return value === null || (typeof value === 'string' && Number.isFinite(Date.parse(value))); }
+function validateIdea(idea) {
+  if (!idea || !validUuid(idea.id) || typeof idea.body !== 'string' || idea.body.length > MAX_IDEA_BODY) {
+    throw new RecordError('아이디어 ID나 본문 형식이 잘못되었거나 크기 제한을 넘었습니다.');
+  }
 }
 
-function validateLibrary(library) {
-  if (!library || library.schemaVersion !== 2 || !Array.isArray(library.problems) ||
+function validateLibrary(library, version = 3) {
+  if (!library || library.schemaVersion !== version || !Array.isArray(library.problems) ||
       library.problems.length < 1 || library.problems.length > MAX_PROBLEMS) throw new Error('Invalid library');
   const ids = new Set();
   const titles = new Set();
+  const ideaIds = new Set();
   for (const problem of library.problems) {
     validateDraft(problem);
     if (!validId(problem.id) || ids.has(problem.id) || normalizeTitle(problem.title) !== problem.title || titles.has(problem.title) ||
-        !(problem.savedAt === null || (typeof problem.savedAt === 'string' && Number.isFinite(Date.parse(problem.savedAt))))) {
+        !validTime(problem.savedAt)) {
       throw new Error('Invalid problem');
     }
     ids.add(problem.id);
     titles.add(problem.title);
+    if (version === 3) {
+      if (!Array.isArray(problem.ideas) || problem.ideas.length > MAX_IDEAS) throw new Error('Invalid ideas');
+      for (const idea of problem.ideas) {
+        validateIdea(idea);
+        if (ideaIds.has(idea.id) || !validTime(idea.savedAt)) throw new Error('Invalid idea');
+        ideaIds.add(idea.id);
+      }
+    }
   }
 }
 
@@ -55,9 +73,15 @@ function parseRecord(raw) {
         throw new Error('Invalid legacy record');
       }
       return {
-        library: { schemaVersion: 2, problems: [{ id: PROBLEM_ID, title: '데이터분석', code: record.code, notes: record.notes, savedAt: record.savedAt }] },
-        legacy: true
+        library: { schemaVersion: 3, problems: [{ id: PROBLEM_ID, title: '데이터분석', code: record.code, notes: record.notes, savedAt: record.savedAt, ideas: [] }] },
+        legacy: 1
       };
+    }
+    if (record.schemaVersion === 2) {
+      validateLibrary(record, 2);
+      // v2 had no ideas field; refuse an ambiguous hand-edited structure.
+      if (record.problems.some((problem) => Object.hasOwn(problem, 'ideas'))) throw new Error('Unexpected ideas in v2');
+      return { library: { ...record, schemaVersion: 3, problems: record.problems.map((problem) => ({ ...problem, ideas: [] })) }, legacy: 2 };
     }
     validateLibrary(record);
     return { library: record, legacy: false };
@@ -85,6 +109,7 @@ class StudyStore {
     this.filePath = path.join(directory, 'study-record.json');
     this.backupPath = `${this.filePath}.bak`;
     this.legacyBackupPath = path.join(directory, 'study-record.v1.json');
+    this.v2BackupPath = path.join(directory, 'study-record.v2.json');
     this.sampleCode = sampleCode;
     this.library = null;
     this.legacy = false;
@@ -108,7 +133,7 @@ class StudyStore {
   }
 
   result() {
-    return { library: structuredClone(this.library), filePath: this.filePath, legacyBackupPath: this.legacyBackupPath };
+    return { library: structuredClone(this.library), filePath: this.filePath, legacyBackupPath: this.legacyBackupPath, v2BackupPath: this.v2BackupPath };
   }
 
   async load() {
@@ -117,7 +142,7 @@ class StudyStore {
     try {
       const raw = await this.readRaw();
       const parsed = raw === null ? {
-        library: { schemaVersion: 2, problems: [{ id: PROBLEM_ID, title: '데이터분석', code: this.sampleCode, notes: '', savedAt: null }] },
+        library: { schemaVersion: 3, problems: [{ id: PROBLEM_ID, title: '데이터분석', code: this.sampleCode, notes: '', savedAt: null, ideas: [] }] },
         legacy: false
       } : parseRecord(raw);
       this.library = parsed.library;
@@ -143,16 +168,17 @@ class StudyStore {
   }
 
   async preserveLegacy() {
-    const temporary = await this.writeTemporary(this.legacyBackupPath, this.baseline);
+    const recoveryPath = this.legacy === 1 ? this.legacyBackupPath : this.v2BackupPath;
+    const temporary = await this.writeTemporary(recoveryPath, this.baseline);
     try {
       try {
         // Publish an already flushed file exclusively; never replace a recovery copy.
-        await fs.link(temporary, this.legacyBackupPath);
+        await fs.link(temporary, recoveryPath);
       } catch (error) {
         if (error.code !== 'EEXIST') throw error;
-        const existing = await this.readRaw(this.legacyBackupPath);
+        const existing = await this.readRaw(recoveryPath);
         if (!existing || !existing.equals(this.baseline)) {
-          throw new RecordError('다른 내용의 v1 복구 사본이 이미 있습니다. 원본과 study-record.v1.json을 따로 보존하고 확인해 주세요.');
+          throw new RecordError(`다른 내용의 v${this.legacy} 복구 사본이 이미 있습니다. 원본과 study-record.v${this.legacy}.json을 따로 보존하고 확인해 주세요.`);
         }
       }
       await this.syncDirectory();
@@ -182,10 +208,18 @@ class StudyStore {
       validateDraft(draft);
       const problem = library.problems.find((item) => item.id === draft.id);
       if (!problem) throw new RecordError('저장할 문제를 찾을 수 없습니다.');
+      const now = new Date().toISOString();
+      if (draft.idea !== undefined && draft.idea !== null) {
+        validateIdea(draft.idea);
+        const idea = problem.ideas.find((item) => item.id === draft.idea.id);
+        if (!idea) throw new RecordError('이 문제에 속한 아이디어를 찾을 수 없습니다.');
+        if (idea.body !== draft.idea.body || idea.savedAt === null) idea.savedAt = now;
+        idea.body = draft.idea.body;
+      }
+      if (problem.code !== draft.code || problem.notes !== draft.notes || (problem.savedAt === null && draft.idea == null)) problem.savedAt = now;
       problem.code = draft.code;
       problem.notes = draft.notes;
-      problem.savedAt = new Date().toISOString();
-      return problem.id;
+      return { problemId: problem.id };
     });
   }
 
@@ -197,8 +231,25 @@ class StudyStore {
       }
       if (library.problems.length >= MAX_PROBLEMS) throw new RecordError('문제는 최대 1,000개까지 보관할 수 있습니다.');
       const id = randomUUID();
-      library.problems.push({ id, title: normalized, code: '', notes: '', savedAt: null });
-      return id;
+      library.problems.push({ id, title: normalized, code: '', notes: '', savedAt: null, ideas: [] });
+      return { problemId: id };
+    });
+  }
+
+  createIdea(problemId, retryIdeaId) {
+    return this.commit((library) => {
+      const problem = library.problems.find((item) => item.id === problemId);
+      if (!problem) throw new RecordError('아이디어를 추가할 문제를 찾을 수 없습니다.');
+      if (retryIdeaId !== undefined && retryIdeaId !== null) {
+        if (!validUuid(retryIdeaId) || !problem.ideas.some((idea) => idea.id === retryIdeaId)) {
+          throw new RecordError('추가를 재확인할 아이디어를 이 문제에서 찾을 수 없습니다.');
+        }
+        return { problemId, ideaId: retryIdeaId };
+      }
+      if (problem.ideas.length >= MAX_IDEAS) throw new RecordError('한 문제에는 아이디어를 최대 100개까지 보관할 수 있습니다.');
+      const ideaId = randomUUID();
+      problem.ideas.push({ id: ideaId, body: '', savedAt: null });
+      return { problemId, ideaId };
     });
   }
 
@@ -209,12 +260,13 @@ class StudyStore {
     let temporary;
     let backupTemporary;
     let committed = false;
+    let target;
     try {
       // Copy and capture the exact target and values before the first await.
       const candidate = structuredClone(this.library);
-      const problemId = change(candidate);
+      target = change(candidate);
       const raw = Buffer.from(`${JSON.stringify(candidate, null, 2)}\n`);
-      if (raw.length > MAX_FILE) throw new RecordError('전체 기록이 8 MiB를 넘습니다. 코드나 메모의 크기를 줄여 주세요.');
+      if (raw.length > MAX_FILE) throw new RecordError('전체 기록이 8 MiB를 넘습니다. 코드·메모·아이디어 본문의 크기를 줄여 주세요.');
       await this.assertUnchanged();
       temporary = await this.writeTemporary(this.filePath, raw);
       if (this.legacy) await this.preserveLegacy();
@@ -231,11 +283,11 @@ class StudyStore {
       this.legacy = false;
       committed = true;
       await this.syncDirectory();
-      return { ok: true, problemId, ...this.result() };
+      return { ok: true, ...target, ...this.result() };
     } catch (error) {
       // A failed fsync after rename is uncertain durability, not a rolled-back write.
       // Return the new library so a created item stays visible and cannot be duplicated.
-      return { ok: false, message: errorMessage(error), ...(committed ? this.result() : {}) };
+      return { ok: false, message: errorMessage(error), ...(committed ? { ...target, ...this.result() } : {}) };
     } finally {
       if (temporary) await fs.unlink(temporary).catch(() => {});
       if (backupTemporary) await fs.unlink(backupTemporary).catch(() => {});
@@ -244,4 +296,4 @@ class StudyStore {
   }
 }
 
-module.exports = { StudyStore, MAX_CODE, MAX_NOTES, MAX_TITLE, MAX_FILE };
+module.exports = { StudyStore, MAX_CODE, MAX_NOTES, MAX_TITLE, MAX_FILE, MAX_IDEAS, MAX_IDEA_BODY };
