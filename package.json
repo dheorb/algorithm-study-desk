@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "electron .",
-    "test": "node --test tests/store.test.cjs",
+    "test": "node --test tests/*.test.cjs",
     "test:e2e": "playwright test",
     "test:all": "npm test && npm run test:e2e",
     "build": "node scripts/build.cjs",

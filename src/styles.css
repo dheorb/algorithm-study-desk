@@ -106,3 +106,23 @@ dialog p { font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
 #idea-body { font-family: inherit; font-size: 14px; min-height: 180px; height: 220px; }
 #save-scope { color: #637367; font-size: 12px; margin: 16px 0 0; }
 @media (max-width: 850px) { .editors.ideas-open { grid-template-columns: minmax(0, 1.3fr) minmax(240px, 1fr); } }
+.panel-toggles { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+#chat-toggle { font-size: 12px; padding: 9px 13px; }
+.editors.chat-open { grid-template-columns: minmax(0, 1.3fr) minmax(280px, 1fr); }
+.chat-open .code-panel { grid-column: 1; grid-row: 1; }
+.chat-open .notes-panel { grid-column: 1; grid-row: 2; }
+.chat-open .ideas-panel { grid-column: 1; grid-row: 3; }
+.chat-open #chat-panel { grid-column: 2; grid-row: 1 / span 3; }
+.chat-open #notes { min-height: 100px; height: 130px; }
+#chat-title { font-size: 14px; margin: 0; }
+#chat-context, .chat-policy, #chat-status { padding: 0 16px; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.chat-policy summary { cursor: pointer; }
+#chat-status[data-state="error"] { color: #a53626; }
+#chat-history { padding: 0 16px; margin: 14px 0; list-style: none; max-height: 400px; overflow-y: auto; }
+#chat-history li { border-top: 1px solid #d9ded4; padding: 12px 0; font-size: 12px; }
+#chat-history p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+#chat-history button { font-size: 11px; padding: 6px; }
+#chat-panel > label { font-size: 12px; font-weight: 700; padding: 8px 16px; }
+#chat-question { flex: none; font-family: inherit; font-size: 13px; min-height: 120px; height: 140px; border-top: 1px solid #d9ded4; border-bottom: 1px solid #d9ded4; }
+.chat-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
+.chat-actions button { font-size: 12px; padding: 9px; }

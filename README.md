@@ -4,7 +4,7 @@
 
 ## 현재 기능
 
-문제를 제목으로 추가하고 목록에서 선택해 각 문제의 코드·자유 메모·여러 아이디어를 따로 저장·복원한다. C++ 편집기는 구문 강조·줄 번호·들여쓰기·괄호 편집·undo/redo·문자열 찾기/바꾸기를 제공한다. 코드 옆에서 아이디어 패널을 열고 닫으며 접근 방법을 모아 볼 수 있다. 처음에는 데이터분석 샘플 한 개가 보이며, 새 문제는 빈 코드·메모와 빈 아이디어 목록으로 시작한다. 이번 범위는 [Issue #9](https://github.com/dheorb/algorithm-study-desk/issues/9), 이전 아이디어 패널은 [Issue #7](https://github.com/dheorb/algorithm-study-desk/issues/7)에 있다.
+문제를 제목으로 추가하고 목록에서 선택해 각 문제의 코드·자유 메모·여러 아이디어를 따로 저장·복원한다. C++ 편집기는 구문 강조·줄 번호·들여쓰기·괄호 편집·undo/redo·문자열 찾기/바꾸기를 제공한다. 코드 옆에서 아이디어 패널을 열고 닫으며 접근 방법을 모아 볼 수 있다. 처음에는 데이터분석 샘플 한 개가 보이며, 새 문제는 빈 코드·메모와 빈 아이디어 목록으로 시작한다. 문제별 AI 대화 패널에서는 Codex에 질문하고 답변을 따로 보관한다. 이번 범위는 [Issue #11](https://github.com/dheorb/algorithm-study-desk/issues/11), 이전 C++ 편집기는 [Issue #9](https://github.com/dheorb/algorithm-study-desk/issues/9), 아이디어 패널은 [Issue #7](https://github.com/dheorb/algorithm-study-desk/issues/7)에 있다.
 
 첫 문제는 사용자의 기존 `데이터분석/sol1.cpp`를 복사해 사용한다. 원본은 수정하지 않는다. 문제 설명 원문과 프로그래머스 채점 결과는 포함하지 않는다.
 
@@ -25,7 +25,7 @@
 
 사용자는 총괄에게 대화로 요청한다. 총괄은 Issue를 작성하고 담당자에게 링크를 전달하며, 구현·검토 담당은 같은 Issue를 기준으로 작업한다. 총괄이 결과를 확인해 PR을 병합한다. 첫 기능은 GitHub 연결 전에 로컬에서 검토·병합했으며 기존 커밋 이력을 그대로 보존했다.
 
-GitHub Actions의 `unit-tests`는 저장 계층 테스트만 실행한다. 앱 화면과 재시작 동작은 관련 변경의 PR에서 별도 통합 검증 근거를 남긴다.
+GitHub Actions의 `unit-tests`는 저장 계층과 대화 상태·프로토콜 단위 테스트를 실행한다. 실제 Codex 호출이나 도구 경계 재현은 실행하지 않는다. 앱 화면과 재시작 동작은 관련 변경의 PR에서 별도 통합 검증 근거를 남긴다.
 
 2026-11-16 [Issue #4](https://github.com/dheorb/algorithm-study-desk/issues/4)의 main 필수 CI 보호 조건 복구로 임시 예외가 종료됐다. 현재는 최신 PR head의 `unit-tests` 통과와 독립 검토를 확인하고 병합한다. 복구 근거와 종료된 예외 기록은 [팀 운영 규칙](docs/team-workflow.md)에 있다.
 
@@ -39,7 +39,7 @@ npm run build
 npm start
 ```
 
-Electron 바이너리는 첫 실행 때 내려받을 수 있으므로 첫 설치·실행에는 인터넷이 필요하다. `npm run build`는 esbuild로 로컬 `dist/renderer.js`와 포함 패키지의 라이선스 전문 `dist/THIRD_PARTY_NOTICES.txt`를 만든다. `npm start`와 `npm run test:e2e`도 실행 전에 자동으로 빌드하므로 산출물이 없는 checkout에서 실행할 수 있다. `dist/`는 Git에서 제외한다. 개발 서버·CDN·런타임 네트워크 요청은 없다.
+Electron 바이너리는 첫 실행 때 내려받을 수 있으므로 첫 설치·실행에는 인터넷이 필요하다. `npm run build`는 esbuild로 로컬 `dist/renderer.js`와 포함 패키지의 라이선스 전문 `dist/THIRD_PARTY_NOTICES.txt`를 만든다. `npm start`와 `npm run test:e2e`도 실행 전에 자동으로 빌드하므로 산출물이 없는 checkout에서 실행할 수 있다. `dist/`는 Git에서 제외한다. 개발 서버·CDN·renderer 네트워크 요청은 없다. AI 질문을 보내면 main에서 실행한 Codex CLI가 명시한 학습 맥락을 OpenAI에 전송한다.
 
 **현재 작업 컴퓨터의 실행 제한:** 이 Ubuntu 환경에서는 위 `npm start`가 Chromium의 `SUID sandbox helper` 오류로 종료된다. 사용자 네임스페이스도 허용되지 않아 `--disable-setuid-sandbox`만으로 해결되지 않았다. OS 설정은 변경하지 않았다. 이 컴퓨터에서 실제 실행을 확인한 로컬 개발 명령은 다음과 같다.
 
@@ -78,6 +78,33 @@ npm start -- --no-sandbox
 **개행 정책:** 내부 표시 문서는 LF로 나누되 처음 읽은 원문과 첫 개행 종류를 따로 기억한다. 읽기만 하거나 코드 미편집 상태에서 메모/아이디어만 저장하면 원래 LF/CRLF·끝 개행·탭/공백을 그대로 보존한다. 코드 편집 시 처음 나타난 개행 종류(LF/CRLF/CR, 없으면 LF)로 저장하며 혼합 개행도 그 종류로 통일한다. undo로 최초 문서와 같아지면 원래 혼합 개행 문자열도 그대로 반환한다. 저장 형식은 기존 v3이며 v1/v2 이전 정책도 유지한다.
 
 저장/추가 진행 중에는 CodeMirror의 editable·readOnly·changeFilter와 버튼 잠금을 함께 적용해 붙여넣기·잘라내기·드롭·들여쓰기·undo/redo·바꾸기를 막는다. Ctrl+S가 끝나거나 실패하면 코드에서 시작한 입력 포커스를 복원하며 실패한 편집 내용·선택·패널·이력을 유지한다.
+
+## 문제별 Codex AI 대화
+
+**연결 조건:** Linux의 PATH에 Codex CLI **0.169.0**이 있어야 하며 Codex 자체 로그인(`codex login status`)이 준비돼 있어야 한다. 모델은 `gpt-6.1-sol`로 고정한다. 인증정보는 앱이 읽지 않으며 별도 API 키/결제 전환은 하지 않는다. 요청 감독은 앱에 포함된 `process-supervisor.cjs`와 Electron의 Node 실행 모드를 사용하며 별도 `timeout` 설치는 필요 없다. CLI 없음/지원 밖 버전/설정 오류에서 기본 권한으로 재시도하지 않는다. 설치나 로그인은 사용자가 Codex의 공식 절차로 관리한다.
+
+1. **AI 대화 열기** → 질문 입력 → **질문 보내기 / 다시 보내기**를 누른다. 기본 설명과 힌트를 요청하며 코드 제안도 텍스트로만 보여준다. 프로그램 실행이나 에디터 자동 수정은 없다.
+2. 전송 순간의 **이 문제 제목·화면 코드·자유 메모·선택 아이디어 미저장 본문·나머지 저장된 아이디어**를 고정한다. 현재 문제의 최근 완료 대화 최대 **6쌍·24 KiB**를 포함하고 오래된 쌍부터 제외한다. 포함/제외 수를 각 시도에 표시한다. 다른 문제·원본 폴더·다른 앱 대화는 수집하지 않는다.
+3. 질문은 **4,000 UTF-16 단위**, 질문과 현재 제목/코드/메모/아이디어 스냅샷은 합쳐 **64 KiB**까지다. 넘으면 잘라 보내지 않고 초안을 유지하며 전송을 거부한다. 전송은 학습 기록의 **저장/Ctrl+S를 대신하지 않는다**.
+4. 앱 전체에 활성 요청 하나만 허용한다. 응답 중 다른 문제로 이동하거나 계속 편집해도 기존 요청은 변하지 않고 답변은 원래 문제에 붙는다. **현재 요청 취소** 뒤 늦은 답변은 무시한다. 패널 닫기와 문제 이동은 질문 초안을 유지한다.
+5. 질문·답변은 같은 데이터 폴더의 **ai-chat.json**에 별도로 자동 저장한다. 응답 저장이 실패하면 질문/답변을 화면에 유지하고 **대화 저장 재시도**로 같은 ID의 저장만 반복한다. 모델을 다시 호출하지 않는다. 연결 실패/취소 뒤 **다시 보내기**는 현재 화면 맥락의 새 ID·새 시도이며 이전 실패/취소 기록은 남는다.
+
+대화 파일은 schemaVersion 1, 문제당 200개/전체 1,000개/직렬화 8 MiB, 답변 48 KiB 제한이다. 임시 파일 동기화·원자 교체·ai-chat.json.bak 한 세대·외부 변경 감지를 적용한다. 코드/메모/아이디어의 파일과 저장 경쟁을 만들지 않으며 대화만 저장해도 기존 v1/v2/v3 학습 파일을 이전하거나 쓰지 않는다. 손상된 대화 파일은 자동 초기화하지 않고 AI만 차단한다. 원본과 .bak를 따로 보존해 복구하고 **대화 다시 불러오기**를 누른다. 기존 학습 기능은 계속 쓸 수 있다.
+
+시작 기록이 보관 한도(문제당 200개·전체 1,000개·8 MiB)를 넘으면 파일 쓰기·모델 실행·전역 잠금 전에 거부하고 질문 초안을 유지한다. 별도 취소가 필요하지 않으며 여유가 있는 문제로 이동해 전송할 수 있다. 이미 받은 답변이나 교체 후 저장 확인 실패는 이 규칙으로 버리지 않고 기존 저장 재시도 보호를 유지한다.
+
+새 프로세스는 이전 `running` 시도를 `interrupted`로 읽어 무한 대기를 피한다. 질문 초안과 저장에 실패한 답변은 메모리에 있으므로 종료 전에 보관해야 한다. 앱 종료에는 보호 안내가 나오며 취소하면 계속 편집한다. 정상 답변 저장 후 원래 질문과 같은 초안만 비우고, 응답 대기 중 새로 쓴 질문은 남긴다. 요청 전용 감독 프로세스가 버전 확인 5초·추론 60초 deadline을 유지한다. 취소·직접 자식 종료·앱 강제 종료로 인한 IPC 단절 시 자기 그룹에 TERM을 보내고, 직접 자식이 먼저 끝나도 500ms 뒤 KILL을 실행한다. 정상 완료에도 이 정리 유예가 붙는다. 같은 그룹에 남은 하위 프로세스가 대상이며, 별도 세션/그룹으로 이탈한 프로세스나 감독 자체의 SIGKILL·정지까지 보장하지 않는다. 강제 종료로 남은 앱 소유 /tmp 작업 폴더는 자동 복구하지 않는다.
+
+**도구 제한:** `exec --json --ephemeral --ignore-user-config --ignore-rules --strict-config`와 실행별 명명 권한 `study-deny`(`filesystem={"/"="deny"}`, `network={enabled=false}`)를 사용한다. `--sandbox read-only`와 혼용하지 않는다. shell/이미지/앱/MCP/플러그인/브라우저·검색/스킬/메모리/하위 에이전트와 자동 맥락은 개별 제한한다. `functions.exec/wait` 이름과 숨은 patch handler는 남으므로 **도구 0개나 모든 OS의 완전 격리를 주장하지 않는다**. 이 버전·구성의 합성 경계 시험과 제한, 과거 read-only 후보의 실패는 [보고서](docs/tasks/011-ai-chat-report.md)에 기록한다. Codex 자체 인증·모델 통신·앱 소유 임시 로그/상태 생성은 이 도구 권한과 별개다.
+
+```bash
+# 실제 모델을 부르지 않는 합성 도구/맥락/설정 실패 검증
+node scripts/verify-codex-boundary.cjs
+# 과거 실패 구성의 비교 재현: 읽기가 관찰되므로 종료 1이 예상됨
+node scripts/verify-codex-boundary.cjs --legacy-read-only
+```
+
+네트워크/사용량/로그인 오류는 비밀이나 원시 stderr를 노출하지 않는 한국어 안내로 표시한다. 질문의 전송 범위는 패널에서 확인할 수 있다. 문제 원문·제약·채점 결과가 없으므로 AI 답변은 정답 판정이 아니다.
 
 ## 기록 보관과 실패 처리
 
@@ -131,7 +158,7 @@ npm test
 xvfb-run -a npm run test:e2e
 ```
 
-Issue #9에서 저장 계층 **19개**, Electron 통합 **32개**가 통과했다(건너뜀 없음). GUI가 있는 환경에서는 `npm run test:e2e`로도 실행할 수 있다. `xvfb-run`이 없는 환경은 별도로 Xvfb를 설치해야 한다. Playwright는 설치된 Electron을 사용하므로 별도의 Playwright 브라우저 설치는 필요 없다.
+Issue #9의 기존 저장 계층 19개와 Electron 통합 32개 회귀를 유지한다. 이번 대화 검증의 정확한 실행 수와 결과는 [Issue #11 보고서](docs/tasks/011-ai-chat-report.md)에 기록한다. GUI가 있는 환경에서는 `npm run test:e2e`로도 실행할 수 있다. `xvfb-run`이 없는 환경은 별도로 Xvfb를 설치해야 한다. Playwright는 설치된 Electron을 사용하므로 별도의 Playwright 브라우저 설치는 필요 없다.
 
 통합 테스트는 Linux에서 Playwright의 기본 설정인 OS 샌드박스 비활성 상태로 실행한다. 샌드박스를 구성한 시스템에서는 `STUDY_DESK_TEST_SANDBOX=1 xvfb-run -a npm run test:e2e`로 활성화할 수 있지만, 이 명령은 현재 컴퓨터에서 통과를 확인하지 않았다.
 
@@ -142,7 +169,7 @@ Issue #9에서 저장 계층 **19개**, Electron 통합 **32개**가 통과했�
 3. 저장과 아이디어 추가의 실제 파일 작성 직전에 테스트만 지연을 주어 편집·전환·추가·반복 Ctrl+S를 시도한다. 세 편집란과 전환 잠금, 시작 시점의 ID/스냅샷을 확인한다. 제품에 테스트용 IPC나 지연 옵션은 추가하지 않았다.
 4. 합성 v1/v2 fixture의 ID·제목·내용·시각과 원래 바이트, 독립된 두 복구 사본, 읽기만 할 때 무변경, 첫 이전, v3 새 PID 복원을 확인한다. 사본 작성·원본 교체·권한 오류 뒤 재시작·재시도를 검증한다.
 5. 손상·미지원 버전·잘못된 구조/ID/소속/필드·외부 변경/삭제·항목 수/입력/전체 파일 제한·복구 사본 충돌을 검사한다. 교체 후 동기화 오류는 테스트에서 주입한다. 아이디어 추가 실패 → 전체 저장 성공 → 같은 ID의 재확인 쓰기 실패 → 다음 재시도에서도 원래 두 항목·초안·저장 내용·선택·패널을 유지하는지 확인한다. 다른 문제의 재시도 상태와 별도 저장 후 명시적인 새 추가도 검증한다.
-6. renderer의 `require`·`process` 차단과 `load`·`save`·`create`·`createIdea`만 노출되는지 확인한다. HTML 모양 제목·아이디어는 텍스트로 표시하며, 740px 좁은 창에서 가로 넘침이 없다. 아이디어만 미저장인 앱 종료도 확인하되 OS 대화상자는 반환값을 '돌아가기'로 대체한다.
+6. renderer의 `require`·`process` 차단, 학습 기록 API `load`·`save`·`create`·`createIdea` 및 제한된 대화 API만 노출되는지 확인한다. HTML 모양 제목·아이디어는 텍스트로 표시하며, 740px 좁은 창에서 가로 넘침이 없다. 아이디어만 미저장인 앱 종료도 확인하되 OS 대화상자는 반환값을 '돌아가기'로 대체한다.
 7. 실제 키보드로 Enter·Tab/Shift+Tab·괄호·undo/redo·포커스 탈출을 확인하고 키워드 색/줄 번호/대응 괄호도 검사한다. 찾기 다음/이전·특수문자 문자열·한 곳/모두/빈 값 바꾸기·undo·코드 외 영역 분리를 확인한다.
 8. 취소 후 커서·선택·스크롤·이력, 같은 문제의 패널/목록 상호작용, A/B 이력 초기화, 저장 후 dirty/undo·실패 후 위치/이력·재시도, v1/v2/v3 CRLF와 혼합 개행·끝 개행·탭/공백·빈 코드·새 PID를 검사한다. Unicode 입력은 자동 붙여넣기/키 입력이며 직접 한글 IME 검증은 아니다.
 
@@ -162,7 +189,7 @@ STUDY_DESK_DATA_DIR="$STUDY_DESK_TEST_DIR" npm start -- --no-sandbox
 ## 구성과 참고 문서
 
 - `src/main.cjs`: 창, 데이터 경로, 단일 실행 잠금, IPC 발신자 검증. 외부 탐색·새 창·권한 요청 차단.
-- `src/preload.cjs`: 고정된 `load()`, `save({id, code, notes, idea: null | {id, body}})`, `create(title)`, `createIdea(problemId, retryIdeaId?)`만 공개. 임의 파일 경로나 IPC 채널을 받지 않는다.
+- `src/preload.cjs`: 고정된 학습 API `load()`, `save({id, code, notes, idea: null | {id, body}})`, `create(title)`, `createIdea(problemId, retryIdeaId?)`를 공개한다. 대화는 별도 `studyChat`의 `load/send/cancel/retrySave/onState`로만 접근한다. 임의 실행 파일·명령·파일 경로·IPC 채널을 받지 않는다.
 - `src/store.cjs`: v1/v2/v3 검사·이전, ID 기반 코드·메모·선택 아이디어의 원자적 저장, 복구 사본·백업·외부 변경 감지. renderer에는 파일시스템이나 프로세스 API를 노출하지 않는다.
 - `src/renderer.js`, `src/index.html`, `src/styles.css`: 한국어 편집 화면, 저장·오류·미저장 상태. 외부 스크립트·폰트·네트워크 요청 없음.
 - `src/code-editor.js`: CodeMirror 조합·문서/개행·이력·명령/검색 UI·잠금 어댑터. 테스트는 실제 키보드/클립보드로 편집하며 전체 문서 단언은 가상 스크롤 밖 내용까지 읽는다.
@@ -174,6 +201,6 @@ CodeMirror 직접 의존성은 state **6.7.6**, view **6.43.15**, commands **6.1
 
 구현 시 확인한 공식 문서: [Electron 보안](https://www.electronjs.org/docs/latest/tutorial/security), [preload와 IPC](https://www.electronjs.org/docs/latest/tutorial/ipc), [앱 데이터 경로와 실행 잠금](https://www.electronjs.org/docs/latest/api/app), [Node 파일시스템](https://nodejs.org/api/fs.html), [Playwright Electron](https://playwright.dev/docs/api/class-electron), [Ubuntu AppArmor](https://documentation.ubuntu.com/security/security-features/privilege-restriction/apparmor/).
 
-C++ 실행·채점, AI 대화, 추천, 외부 제출, 검색·삭제·이름 변경·일괄 가져오기는 이번 범위에 포함하지 않는다. 샘플 알고리즘의 정답 여부는 검증하지 않았다. OS sandbox 활성 실행, 직접 한글 IME 입력, OS 네이티브 종료 대화상자의 수동 클릭, 실제 전원 차단은 검증하지 않았다.
+C++ 실행·채점, AI 자동 코드 수정, 추천, 외부 제출, 검색·삭제·이름 변경·일괄 가져오기는 이번 범위에 포함하지 않는다. 샘플 알고리즘의 정답 여부는 검증하지 않았다. OS sandbox 활성 실행, 직접 한글 IME 입력, OS 네이티브 종료 대화상자의 수동 클릭, 실제 전원 차단은 검증하지 않았다.
 
-이번 결과는 [C++ 편집기 구현 보고서](docs/tasks/009-cpp-editor-report.md)에 기록한다. [아이디어 패널](docs/tasks/007-problem-ideas-report.md), [문제 목록](docs/tasks/005-problem-library-report.md), [첫 기능](docs/tasks/001-implementation-report.md) 보고서는 당시 결과를 보존한 기록이다. 독립 검토·병합·Issue/보드 완료 처리는 총괄과 검토 담당의 후속 단계다. GitHub CI의 실제 상태는 PR에 따로 기록하며 로컬 성공을 CI 통과로 간주하지 않는다.
+이번 결과는 [AI 대화 구현 보고서](docs/tasks/011-ai-chat-report.md)에 기록한다. [C++ 편집기 구현 보고서](docs/tasks/009-cpp-editor-report.md)는 당시 검증을 보존한다. [아이디어 패널](docs/tasks/007-problem-ideas-report.md), [문제 목록](docs/tasks/005-problem-library-report.md), [첫 기능](docs/tasks/001-implementation-report.md) 보고서는 당시 결과를 보존한 기록이다. 독립 검토·병합·Issue/보드 완료 처리는 총괄과 검토 담당의 후속 단계다. GitHub CI의 실제 상태는 PR에 따로 기록하며 로컬 성공을 CI 통과로 간주하지 않는다.

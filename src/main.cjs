@@ -3,6 +3,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { StudyStore } = require('./store.cjs');
+const { ChatStore } = require('./chat-store.cjs');
+const { ChatService } = require('./chat-service.cjs');
+const { CodexProvider } = require('./codex-provider.cjs');
 
 app.setName('Algorithm Study Desk');
 const appRoot = path.resolve(__dirname, '..');
@@ -48,6 +51,14 @@ if (!app.requestSingleInstanceLock()) {
     });
     const trusted = (event) => event.sender === window.webContents &&
       event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === pageURL;
+    const chat = new ChatService(new ChatStore(dataDirectory), store, new CodexProvider(), state => {
+      if (!window.isDestroyed()) window.webContents.send('chat:state', state);
+    });
+    for (const [channel, handle] of Object.entries({
+      'chat:load': () => chat.load(), 'chat:send': input => chat.send(input),
+      'chat:cancel': id => chat.cancel(id), 'chat:retry-save': id => chat.retrySave(id)
+    })) ipcMain.handle(channel, (event, input) => trusted(event) ? handle(input) : { ok: false, message: '허용되지 않은 요청입니다.' });
+    window.on('closed', () => chat.close());
     ipcMain.handle('study:load', (event) => {
       if (!trusted(event)) return { ok: false, message: '허용되지 않은 요청입니다.' };
       return store.load();
@@ -72,8 +83,8 @@ if (!app.requestSingleInstanceLock()) {
     window.webContents.on('will-prevent-unload', (event) => {
       const choice = dialog.showMessageBoxSync(window, {
         type: 'warning', title: '저장하지 않은 변경 사항',
-        message: '아직 저장하지 않은 코드·메모·아이디어가 있습니다.',
-        detail: '편집을 계속하려면 돌아가기를 선택하세요. 저장 중이라면 완료될 때까지 기다려 주세요.',
+        message: '저장하지 않은 코드·메모·아이디어·질문 초안 또는 진행 중인 대화가 있습니다.',
+        detail: '돌아가면 편집과 대화를 계속합니다. 닫으면 질문 초안·저장 실패 답변이 사라질 수 있으며 진행 중 요청은 중단됩니다.',
         buttons: ['돌아가기', '저장하지 않고 닫기'], defaultId: 0, cancelId: 0, noLink: true
       });
       if (choice === 1) event.preventDefault();
