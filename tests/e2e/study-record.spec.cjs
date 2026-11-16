@@ -12,6 +12,18 @@ const heading = page => page.locator('#problem-title');
 const problem = (page, title) => page.locator('#problem-list').getByRole('button', { name: title, exact: true });
 const current = page => page.locator('#problem-list button[aria-current="true"]');
 const state = page => page.locator('#status');
+const codeInput = page => page.getByRole('textbox', { name: '풀이 코드', exact: true });
+// Read the complete CodeMirror document, including lines outside the rendered viewport.
+const codeText = page => codeInput(page).evaluate(node => node.cmTile.root.view.state.doc.toString());
+async function setCode(page, value) {
+  await codeInput(page).focus();
+  await page.keyboard.press('Control+a');
+  if (value) {
+    await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), value);
+    await page.keyboard.press('Control+v');
+  }
+  else await page.keyboard.press('Backspace');
+}
 
 async function launch() {
   const env = { ...process.env, STUDY_DESK_DATA_DIR: directory };
@@ -34,7 +46,7 @@ async function restart(force = false) {
   return page;
 }
 async function edit(page, code, notes) {
-  await page.getByLabel('풀이 코드').fill(code);
+  await setCode(page, code);
   await page.getByLabel('생각해볼점').fill(notes);
 }
 async function save(page) {
@@ -48,7 +60,7 @@ async function add(page, title) {
 async function expectDraft(page, title, code, notes) {
   await expect(heading(page)).toHaveText(title);
   await expect(current(page)).toHaveText(title);
-  await expect(page.getByLabel('풀이 코드')).toHaveValue(code);
+  await expect.poll(() => codeText(page)).toBe(code.replace(/\r\n?/g, '\n'));
   await expect(page.getByLabel('생각해볼점')).toHaveValue(notes);
 }
 
@@ -200,7 +212,7 @@ test('delayed real save freezes typing, switching, adding and repeated Ctrl+S un
   }, root);
   await page.locator('#save').click();
   await expect(state(page)).toHaveAttribute('data-state', 'saving');
-  await expect(page.getByLabel('풀이 코드')).toHaveAttribute('readonly', '');
+  await expect(codeInput(page)).toHaveAttribute('contenteditable', 'false');
   await expect(page.getByLabel('생각해볼점')).toHaveAttribute('readonly', '');
   await page.getByLabel('풀이 코드').focus();
   await page.keyboard.type('must not enter');
@@ -519,11 +531,15 @@ test('permission errors on close/save and discarded additions keep all drafts, I
   await expectAll(restored, 'retry', A1);
 });
 
-for (const operation of ['save', 'createIdea']) {
+for (const operation of ['save', 'createIdea', 'createProblem']) {
   test(`delayed ${operation} locks all three editors, both lists, additions, panel close and Ctrl+S`, async () => {
     const page = await launch();
     const { A1 } = await seedIdeas(page);
     if (operation === 'save') await editAll(page, 'snapshot');
+    await page.locator('#code-search summary').click();
+    await page.getByLabel('찾을 문자열', { exact: true }).fill('code');
+    await page.getByLabel('바꿀 문자열', { exact: true }).fill('must not replace');
+    if (operation === 'createProblem') await page.getByLabel('새 문제 제목').fill('C');
     await app.evaluate((_electron, root) => {
       const { StudyStore } = process.mainModule.require(`${root}/src/store.cjs`);
       const write = StudyStore.prototype.writeTemporary;
@@ -532,9 +548,23 @@ for (const operation of ['save', 'createIdea']) {
       StudyStore.prototype.writeTemporary = async function (...args) { await gate; return write.apply(this, args); };
       globalThis.releaseStudyWrite = () => { StudyStore.prototype.writeTemporary = write; release(); };
     }, root);
-    await page.locator(operation === 'save' ? '#save' : '#idea-add').click();
+    await page.locator(operation === 'save' ? '#save' : operation === 'createProblem' ? '#add' : '#idea-add').click();
     await expect(state(page)).toHaveAttribute('data-state', 'saving');
-    for (const selector of ['#code', '#notes', '#idea-body']) {
+    await expect(codeInput(page)).toHaveAttribute('contenteditable', 'false');
+    await codeInput(page).focus();
+    await page.keyboard.type('not accepted');
+    await app.evaluate(({ clipboard }) => clipboard.writeText('blocked paste\n한글'));
+    for (const key of ['Control+a', 'Control+x', 'Control+v', 'Tab', 'Shift+Tab', 'Enter', '{', 'Control+z', 'Control+Shift+z', 'Control+y']) await page.keyboard.press(key);
+    await codeInput(page).evaluate(node => {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.setData('text/plain', 'blocked drop');
+      node.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }));
+    });
+    for (const selector of ['#code-undo', '#code-redo', '#replace-one', '#replace-all', '#find-next', '#code-find', '#code-replace']) {
+      await expect(page.locator(selector)).toBeDisabled();
+      await page.locator(selector).dispatchEvent('click');
+    }
+    for (const selector of ['#notes', '#idea-body']) {
       await expect(page.locator(selector)).toHaveAttribute('readonly', '');
       await page.locator(selector).focus();
       await page.keyboard.type('not accepted');
@@ -549,7 +579,8 @@ for (const operation of ['save', 'createIdea']) {
     for (const selector of ['#save', '#add', '#idea-add', '#ideas-toggle']) await expect(page.locator(selector)).toBeDisabled();
     await app.evaluate(() => globalThis.releaseStudyWrite());
     await expect(state(page)).not.toHaveAttribute('data-state', 'saving');
-    await expect(ideaButtons(page)).toHaveCount(operation === 'save' ? 2 : 3);
+    await expect(ideaButtons(page)).toHaveCount(operation === 'save' ? 2 : operation === 'createProblem' ? 0 : 3);
+    if (operation === 'createProblem') await expectDraft(page, 'C', '', '');
     const record = JSON.parse(await fs.readFile(filename(), 'utf8')).problems[0];
     expect(record.ideas[0].body).toBe(operation === 'save' ? '아이디어 snapshot' : '아이디어 saved');
     expect(record.ideas[1].body).toBe('두 번째 저장 아이디어');
@@ -788,4 +819,251 @@ test('idea text is not HTML, foreign/unknown IPC targets are refused, and idea-o
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('ideas-narrow-text.png'), fullPage: true });
   await save(page);
+});
+
+const codePosition = page => codeInput(page).evaluate(node => {
+  const view = node.cmTile.root.view;
+  return { from: view.state.selection.main.from, to: view.state.selection.main.to, top: view.scrollDOM.scrollTop, left: view.scrollDOM.scrollLeft };
+});
+async function searchCode(page, query, replacement = '') {
+  await codeInput(page).focus();
+  await page.keyboard.press('Control+f');
+  await page.getByLabel('찾을 문자열', { exact: true }).fill(query);
+  await page.getByLabel('바꿀 문자열', { exact: true }).fill(replacement);
+}
+
+test('C++ keyboard editing, syntax, lines, brackets, indentation, undo and Tab escape', async ({}, testInfo) => {
+  const page = await launch();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('console', e => { if (e.type() === 'error') errors.push(e.text()); });
+  await setCode(page, '');
+  await page.keyboard.type('int main() ');
+  await page.keyboard.press('{');
+  await expect.poll(() => codeText(page)).toBe('int main() {}');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('return 0;');
+  await expect.poll(() => codeText(page)).toBe('int main() {\n    return 0;\n}');
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.press('End');
+  await expect(page.locator('.cm-matchingBracket')).toHaveCount(2);
+  await expect(page.locator('.cm-lineNumbers')).toContainText('3');
+  const colors = await page.locator('.cm-line').first().evaluate(line => ({
+    base: getComputedStyle(line).color,
+    highlighted: [...line.querySelectorAll('span')].filter(span => span.textContent === 'int').map(span => getComputedStyle(span).color)
+  }));
+  expect(colors.highlighted.some(color => color !== colors.base)).toBe(true);
+  await page.keyboard.press('Control+a');
+  await page.keyboard.press('Tab');
+  await expect.poll(() => codeText(page)).toBe('    int main() {\n        return 0;\n    }');
+  await page.keyboard.press('Shift+Tab');
+  await expect.poll(() => codeText(page)).toBe('int main() {\n    return 0;\n}');
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => codeText(page)).toBe('    int main() {\n        return 0;\n    }');
+  await page.keyboard.press('Control+Shift+z');
+  await expect.poll(() => codeText(page)).toBe('int main() {\n    return 0;\n}');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Tab');
+  await expect(codeInput(page)).not.toBeFocused();
+  await setCode(page, '// 한국어 주석 📝\nconst char* text = "문자열";\n');
+  await save(page);
+  await page.screenshot({ path: testInfo.outputPath('cpp-editor.png'), fullPage: true });
+  expect(await page.evaluate(() => [...document.styleSheets].filter(sheet => sheet.ownerNode.tagName === 'STYLE').every(sheet => sheet.ownerNode.nonce === 'study-editor-style'))).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('literal find/replace and isolated undo affect only current code, with empty/no-match handling', async () => {
+  const page = await launch();
+  await seedIdeas(page);
+  const original = '// a.* a.*\nconst char* x = "a.*";\n';
+  await edit(page, original, 'a.* 메모');
+  await page.locator('#idea-body').fill('a.* 아이디어');
+  await save(page);
+  await searchCode(page, 'a.*', '다름');
+  await page.getByRole('button', { name: '다음 찾기', exact: true }).click();
+  expect((await codePosition(page)).from).toBe(3);
+  await page.getByRole('button', { name: '다음 찾기', exact: true }).click();
+  expect((await codePosition(page)).from).toBe(7);
+  await page.getByRole('button', { name: '이전 찾기', exact: true }).click();
+  expect((await codePosition(page)).from).toBe(3);
+  await page.getByRole('button', { name: '한 곳 바꾸기', exact: true }).click();
+  const once = original.replace('a.*', '다름');
+  await expect.poll(() => codeText(page)).toBe(once);
+  await page.getByLabel('바꿀 문자열', { exact: true }).fill('');
+  await page.getByRole('button', { name: '모두 바꾸기', exact: true }).click();
+  await expect.poll(() => codeText(page)).toBe(once.replaceAll('a.*', ''));
+  await page.getByRole('button', { name: '실행 취소', exact: true }).click();
+  await expect.poll(() => codeText(page)).toBe(once);
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => codeText(page)).toBe(original);
+  await expect(state(page)).toHaveAttribute('data-state', 'saved');
+  await searchCode(page, '없음', 'X');
+  await page.locator('#replace-all').click();
+  await expect(page.locator('#search-status')).toHaveText('검색 결과가 없습니다.');
+  await page.locator('#code-find').fill('');
+  await page.locator('#replace-all').click();
+  await expect(page.locator('#search-status')).toHaveText('검색어를 입력하세요.');
+  await expect.poll(() => codeText(page)).toBe(original);
+  await expect(page.locator('#notes')).toHaveValue('a.* 메모');
+  await expect(page.locator('#idea-body')).toHaveValue('a.* 아이디어');
+  await problem(page, 'B').click();
+  await setCode(page, 'a.* B');
+  await searchCode(page, 'a.*', '$&');
+  await page.locator('#replace-all').click();
+  await expect.poll(() => codeText(page)).toBe('$& B');
+  await page.locator('#code-find').focus();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#code-search')).not.toHaveAttribute('open', '');
+  await expect(codeInput(page)).toBeFocused();
+  await page.keyboard.press('Control+s');
+  await expect(state(page)).toHaveAttribute('data-state', 'saved');
+  const disk = JSON.parse(await fs.readFile(filename(), 'utf8'));
+  expect(disk.problems[0]).toMatchObject({ code: original, notes: 'a.* 메모', ideas: [{ body: 'a.* 아이디어' }, { body: '두 번째 저장 아이디어' }] });
+  expect(disk.problems[1].code).toBe('$& B');
+});
+
+test('cancel preserves code selection/scroll/history; same-problem actions keep state, real moves and discard reset it', async ({}, testInfo) => {
+  const page = await launch();
+  await seedIdeas(page);
+  const long = Array.from({ length: 120 }, (_, i) => `// ${i} 한글 long line`).join('\n');
+  await setCode(page, long);
+  await save(page);
+  await codeInput(page).focus();
+  await page.keyboard.press('Control+Home');
+  for (let i = 0; i < 60; i++) await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('End');
+  await page.keyboard.insertText(' dirty');
+  const edited = long.replace('// 60 한글 long line', '// 60 한글 long line dirty');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Shift+End');
+  await expect.poll(async () => (await codePosition(page)).top).toBeGreaterThan(0);
+  const position = await codePosition(page);
+  await problem(page, 'B').click();
+  await expect(page.locator('#leave-dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  expect(await codePosition(page)).toEqual(position);
+  await expect.poll(() => codeText(page)).toBe(edited);
+  await codeInput(page).focus();
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => codeText(page)).toBe(long);
+  await expect(state(page)).toHaveAttribute('data-state', 'saved');
+  const cleanPosition = await codePosition(page);
+  await ideaButtons(page).nth(1).click();
+  expect(await codePosition(page)).toEqual(cleanPosition);
+  await page.locator('#ideas-toggle').click();
+  expect(await codePosition(page)).toEqual(cleanPosition);
+  await page.locator('#ideas-toggle').click();
+  await addIdea(page);
+  expect(await codePosition(page)).toEqual(cleanPosition);
+  await page.getByRole('button', { name: '다시 실행', exact: true }).click();
+  await expect.poll(() => codeText(page)).toBe(edited);
+  await page.setViewportSize({ width: 740, height: 700 });
+  await page.screenshot({ path: testInfo.outputPath('cpp-narrow.png'), fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await ideaButtons(page).nth(0).click();
+  await page.locator('#discard-move').click();
+  await expect.poll(() => codeText(page)).toBe(long);
+  await expect(page.locator('#code-undo')).toBeDisabled();
+  await expect(page.locator('#code-redo')).toBeDisabled();
+  await setCode(page, 'A saved via move');
+  await problem(page, 'B').click();
+  await page.locator('#save-move').click();
+  await expectDraft(page, 'B', '', '');
+  await expect(page.locator('#code-undo')).toBeDisabled();
+  await setCode(page, 'B edit');
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => codeText(page)).toBe('');
+  await page.keyboard.press('Control+y');
+  await expect.poll(() => codeText(page)).toBe('B edit');
+  await problem(page, '데이터분석').click();
+  await page.locator('#discard-move').click();
+  await expect.poll(() => codeText(page)).toBe('A saved via move');
+  await expect(page.locator('#code-undo')).toBeDisabled();
+});
+
+for (const version of [1, 2, 3]) {
+  test(`C++ v${version} CRLF read, idea-only save, real paste/edit/undo and new PID preserve exact values`, async () => {
+    const source = '// 한글 📝\r\n\tint x = 1;\r\n    // spaces\r\n';
+    const savedAt = '2024-01-02T03:04:05.000Z';
+    const idea = { id: '03030303-0303-4303-8303-030303030303', body: '기존 아이디어', savedAt };
+    const problemRecord = { id: 'data-analysis', title: '데이터분석', code: source, notes: '기존 메모', savedAt };
+    const record = version === 1 ? { schemaVersion: 1, problemId: 'data-analysis', code: source, notes: '기존 메모', savedAt } :
+      { schemaVersion: version, problems: [{ ...problemRecord, ...(version === 3 ? { ideas: [idea] } : {}) }] };
+    const raw = Buffer.from(JSON.stringify(record) + '\n');
+    await fs.writeFile(filename(), raw);
+    let page = await launch();
+    await expectDraft(page, '데이터분석', source, '기존 메모');
+    await expect(state(page)).toHaveAttribute('data-state', 'saved');
+    await expect(page.locator('#code-undo')).toBeDisabled();
+    expect(await fs.readFile(filename())).toEqual(raw);
+    await openIdeas(page);
+    if (version < 3) await addIdea(page);
+    await page.locator('#idea-body').fill('아이디어만 바꿈');
+    await save(page);
+    let disk = JSON.parse(await fs.readFile(filename(), 'utf8'));
+    expect(disk.problems[0]).toMatchObject({ code: source, notes: '기존 메모', savedAt });
+    if (version < 3) expect(await fs.readFile(path.join(directory, `study-record.v${version}.json`))).toEqual(raw);
+    await codeInput(page).focus();
+    await page.keyboard.press('Control+End');
+    const pasted = '// 붙여넣기\n\t한글 📝\n';
+    await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), pasted);
+    await page.keyboard.press('Control+v');
+    await expect.poll(() => codeText(page)).toBe(source.replaceAll('\r\n', '\n') + pasted);
+    await page.keyboard.press('Control+s');
+    await expect(state(page)).toHaveAttribute('data-state', 'saved');
+    expect(JSON.parse(await fs.readFile(filename(), 'utf8')).problems[0].code).toBe(source + pasted.replaceAll('\n', '\r\n'));
+    await expect(codeInput(page)).toBeFocused();
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => codeText(page)).toBe(source.replaceAll('\r\n', '\n'));
+    await expect(state(page)).toHaveAttribute('data-state', 'dirty');
+    await page.keyboard.press('Control+Shift+z');
+    await expect(state(page)).toHaveAttribute('data-state', 'saved');
+    page = await restart(true);
+    await openIdeas(page);
+    await expectDraft(page, '데이터분석', source + pasted.replaceAll('\n', '\r\n'), '기존 메모');
+    await expect(page.locator('#idea-body')).toHaveValue('아이디어만 바꿈');
+    await setCode(page, '');
+    await save(page);
+    page = await restart();
+    await expectDraft(page, '데이터분석', '', '기존 메모');
+    expect(JSON.parse(await fs.readFile(filename(), 'utf8')).problems[0].code).toBe('');
+  });
+}
+
+test('mixed newlines stay exact until editing; save failure retains editor position/history and retries', async () => {
+  test.skip(process.getuid?.() === 0, 'POSIX permission denial needs a non-root user');
+  const original = '// 첫 CRLF\r\n\tint a;\n// 끝 LF\n';
+  const fixture = { schemaVersion: 3, problems: [{ id: 'data-analysis', title: '데이터분석', code: original, notes: '', savedAt: '2024-01-01T00:00:00.000Z', ideas: [] }] };
+  await fs.writeFile(filename(), JSON.stringify(fixture));
+  let page = await launch();
+  await page.locator('#notes').fill('메모만 저장');
+  await save(page);
+  expect(JSON.parse(await fs.readFile(filename(), 'utf8')).problems[0].code).toBe(original);
+  await codeInput(page).focus();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('// changed');
+  await page.keyboard.press('Control+z');
+  await expect(state(page)).toHaveAttribute('data-state', 'saved');
+  await page.keyboard.press('Control+Shift+z');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Shift+End');
+  const position = await codePosition(page);
+  const before = await fs.readFile(filename());
+  await fs.chmod(directory, 0o500);
+  await page.keyboard.press('Control+s');
+  await expect(state(page)).toContainText('권한');
+  await expect(codeInput(page)).toBeFocused();
+  expect(await codePosition(page)).toEqual(position);
+  expect(await fs.readFile(filename())).toEqual(before);
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => codeText(page)).toBe(original.replaceAll('\r\n', '\n'));
+  await page.keyboard.press('Control+y');
+  await expect.poll(() => codeText(page)).toBe(original.replaceAll('\r\n', '\n') + '// changed');
+  await fs.chmod(directory, 0o700);
+  await page.keyboard.press('Control+s');
+  await expect(state(page)).toHaveAttribute('data-state', 'saved');
+  const expected = original.replace(/\r?\n/g, '\r\n') + '// changed';
+  expect(JSON.parse(await fs.readFile(filename(), 'utf8')).problems[0].code).toBe(expected);
+  page = await restart();
+  await expectDraft(page, '데이터분석', expected, '메모만 저장');
 });

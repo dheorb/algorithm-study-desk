@@ -4,15 +4,30 @@
   "private": true,
   "description": "문제 하나의 코드와 메모를 보관하는 개인 학습 앱",
   "main": "src/main.cjs",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "start": "electron .",
     "test": "node --test tests/store.test.cjs",
     "test:e2e": "playwright test",
-    "test:all": "npm test && npm run test:e2e"
+    "test:all": "npm test && npm run test:e2e",
+    "build": "node scripts/build.cjs",
+    "prestart": "npm run build",
+    "pretest:e2e": "npm run build"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",
-    "electron": "45.3.2"
+    "electron": "45.3.2",
+    "esbuild": "0.28.2"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "6.20.4",
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-cpp": "6.0.3",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/search": "6.7.2",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15"
   }
 }

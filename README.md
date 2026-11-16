@@ -4,7 +4,7 @@
 
 ## 현재 기능
 
-문제를 제목으로 추가하고 목록에서 선택해 각 문제의 코드·자유 메모·여러 아이디어를 따로 저장·복원한다. 코드 옆에서 아이디어 패널을 열고 닫으며 접근 방법을 모아 볼 수 있다. 처음에는 데이터분석 샘플 한 개가 보이며, 새 문제는 빈 코드·메모와 빈 아이디어 목록으로 시작한다. 이번 범위는 [Issue #7](https://github.com/dheorb/algorithm-study-desk/issues/7), 이전 문제 목록 범위는 [Issue #5](https://github.com/dheorb/algorithm-study-desk/issues/5)에 있다.
+문제를 제목으로 추가하고 목록에서 선택해 각 문제의 코드·자유 메모·여러 아이디어를 따로 저장·복원한다. C++ 편집기는 구문 강조·줄 번호·들여쓰기·괄호 편집·undo/redo·문자열 찾기/바꾸기를 제공한다. 코드 옆에서 아이디어 패널을 열고 닫으며 접근 방법을 모아 볼 수 있다. 처음에는 데이터분석 샘플 한 개가 보이며, 새 문제는 빈 코드·메모와 빈 아이디어 목록으로 시작한다. 이번 범위는 [Issue #9](https://github.com/dheorb/algorithm-study-desk/issues/9), 이전 아이디어 패널은 [Issue #7](https://github.com/dheorb/algorithm-study-desk/issues/7)에 있다.
 
 첫 문제는 사용자의 기존 `데이터분석/sol1.cpp`를 복사해 사용한다. 원본은 수정하지 않는다. 문제 설명 원문과 프로그래머스 채점 결과는 포함하지 않는다.
 
@@ -27,16 +27,19 @@
 
 GitHub Actions의 `unit-tests`는 저장 계층 테스트만 실행한다. 앱 화면과 재시작 동작은 관련 변경의 PR에서 별도 통합 검증 근거를 남긴다.
 
+2026-11-16 [Issue #4](https://github.com/dheorb/algorithm-study-desk/issues/4)의 main 필수 CI 보호 조건 복구로 임시 예외가 종료됐다. 현재는 최신 PR head의 `unit-tests` 통과와 독립 검토를 확인하고 병합한다. 복구 근거와 종료된 예외 기록은 [팀 운영 규칙](docs/team-workflow.md)에 있다.
+
 ## 설치와 실행
 
 2026-11-16에 Ubuntu 26.04.1 LTS, Node **22.22.1**, npm **9.2.0**, Electron **45.3.2**, Playwright **1.65.1**에서 확인했다. Node 22.12 이상이 필요하다. 버전은 `package-lock.json`에 고정되어 있다.
 
 ```bash
 npm ci
+npm run build
 npm start
 ```
 
-Electron 바이너리는 첫 실행 때 내려받을 수 있으므로 첫 설치·실행에는 인터넷이 필요하다. 앱에는 별도 빌드나 서버가 없고, 실행 후에는 네트워크 없이 동작한다.
+Electron 바이너리는 첫 실행 때 내려받을 수 있으므로 첫 설치·실행에는 인터넷이 필요하다. `npm run build`는 esbuild로 로컬 `dist/renderer.js`와 포함 패키지의 라이선스 전문 `dist/THIRD_PARTY_NOTICES.txt`를 만든다. `npm start`와 `npm run test:e2e`도 실행 전에 자동으로 빌드하므로 산출물이 없는 checkout에서 실행할 수 있다. `dist/`는 Git에서 제외한다. 개발 서버·CDN·런타임 네트워크 요청은 없다.
 
 **현재 작업 컴퓨터의 실행 제한:** 이 Ubuntu 환경에서는 위 `npm start`가 Chromium의 `SUID sandbox helper` 오류로 종료된다. 사용자 네임스페이스도 허용되지 않아 `--disable-setuid-sandbox`만으로 해결되지 않았다. OS 설정은 변경하지 않았다. 이 컴퓨터에서 실제 실행을 확인한 로컬 개발 명령은 다음과 같다.
 
@@ -55,6 +58,26 @@ npm start -- --no-sandbox
 미저장 편집이 있으면 **문제/아이디어 선택·문제/아이디어 추가·패널 닫기**에서 **계속 편집 / 버리고 이동 / 저장 후 이동**을 선택한다(닫기는 `버리고 닫기 / 저장 후 닫기`). Esc도 계속 편집과 같다. 저장과 버리기 모두 **코드·자유 메모·선택 아이디어 전체**에 적용된다. 저장 실패 시 이동하거나 패널을 닫지 않고 세 초안·선택·패널을 유지한다. 버리고 추가를 선택해도 추가 자체가 실패하면 초안을 유지한다. 저장·추가 중에는 세 편집란을 읽기 전용으로 바꾸고 선택·추가·패널 전환·중복 저장을 잠근다. 요청의 문제 ID·아이디어 ID와 내용은 시작 시 고정된다. 앱 종료 시에도 미저장 편집은 **돌아가기 / 저장하지 않고 닫기**로 확인한다.
 
 제목은 앞뒤 공백을 제거해 1~120자(HTML maxlength와 같은 UTF-16 길이)로 제한한다. 공백만 있는 값과 제어문자·줄바꿈은 거부한다. 앞뒤 공백을 제거한 **완전히 같은 제목은 중복 등록할 수 없다**. 대소문자·내부 공백은 구분한다. HTML 모양의 제목도 실행하지 않고 일반 텍스트로 표시한다.
+
+## C++ 코드 편집
+
+| 동작 | 방법 |
+| --- | --- |
+| 자동 들여쓰기·괄호 | Enter로 C++ 문맥에 맞춰 들여쓰기, `(`·`[`·`{`와 따옴표 자동 닫기, 커서 옆 대응 괄호 표시 |
+| 들여쓰기/내어쓰기 | Tab / Shift+Tab, 선택한 여러 줄도 적용. 새 들여쓰기는 공백 4칸, 기존 탭은 문자 그대로 유지하고 폭 4로 표시 |
+| 편집기에서 키보드로 나가기 | Esc를 누른 뒤 2초 안에 Tab. Ctrl+M으로 Tab 이동 모드를 켜고 끌 수도 있음 |
+| 실행 취소/다시 실행 | Ctrl+Z / Ctrl+Shift+Z 또는 Ctrl+Y, 위쪽 한국어 버튼도 사용 가능 |
+| 찾기/바꾸기 | Ctrl+F 또는 **코드 찾기·바꾸기**를 열고 문자열 입력 → 이전/다음 찾기, 한 곳/모두 바꾸기 |
+| 검색창 키보드 | Enter / Shift+Enter로 다음/이전, Esc로 검색창을 닫고 코드에 포커스 복귀 |
+| 저장 | Ctrl+S 또는 저장 버튼. 현재 코드·자유 메모·선택 아이디어를 함께 저장 |
+
+찾기는 **현재 문제의 코드만** 대상으로 하고 대소문자를 구분한다. 정규식·이스케이프 해석은 하지 않으며 `.*`, `$&`도 일반 문자열이다. 빈 검색어는 작업하지 않고 안내한다. 빈 바꿀 문자열은 찾은 부분을 삭제한다. 한 곳 바꾸기는 현재 선택이 검색어와 같으면 그곳을 바꾸고, 아니면 다음 일치 항목을 찾아 바꾼다. 끝에 도달하면 처음으로 돌아간다. 바꾸기와 들여쓰기는 명령 한 번씩 undo할 수 있고, 메모·아이디어·다른 문제는 건드리지 않는다.
+
+실제 **다른 문제로 이동하면 코드 undo/redo 이력을 초기화**한다. 같은 문제의 아이디어 선택/추가·패널 열기/닫기는 코드 값이 같으면 문서·선택·커서·이력을 유지한다. 화면 높이가 바뀌면 스크롤은 가능한 범위 안에서 조정된다. 전환 취소/Esc는 편집 위치와 이력을 유지한다. 명시적 전체 버리기로 코드가 달라지면 저장본과 빈 이력으로 돌아가 버린 코드를 undo로 복원하지 않는다. 저장은 이력을 지우지 않으며 저장 전후 입력이 한 undo 단계로 합쳐지지 않는다. 이력은 앱 재실행 후에는 복원하지 않는다.
+
+**개행 정책:** 내부 표시 문서는 LF로 나누되 처음 읽은 원문과 첫 개행 종류를 따로 기억한다. 읽기만 하거나 코드 미편집 상태에서 메모/아이디어만 저장하면 원래 LF/CRLF·끝 개행·탭/공백을 그대로 보존한다. 코드 편집 시 처음 나타난 개행 종류(LF/CRLF/CR, 없으면 LF)로 저장하며 혼합 개행도 그 종류로 통일한다. undo로 최초 문서와 같아지면 원래 혼합 개행 문자열도 그대로 반환한다. 저장 형식은 기존 v3이며 v1/v2 이전 정책도 유지한다.
+
+저장/추가 진행 중에는 CodeMirror의 editable·readOnly·changeFilter와 버튼 잠금을 함께 적용해 붙여넣기·잘라내기·드롭·들여쓰기·undo/redo·바꾸기를 막는다. Ctrl+S가 끝나거나 실패하면 코드에서 시작한 입력 포커스를 복원하며 실패한 편집 내용·선택·패널·이력을 유지한다.
 
 ## 기록 보관과 실패 처리
 
@@ -108,7 +131,7 @@ npm test
 xvfb-run -a npm run test:e2e
 ```
 
-Issue #7에서 저장 계층 **19개**, Electron 통합 **24개**가 통과했다(건너뜀 없음). GUI가 있는 환경에서는 `npm run test:e2e`로도 실행할 수 있다. `xvfb-run`이 없는 환경은 별도로 Xvfb를 설치해야 한다. Playwright는 설치된 Electron을 사용하므로 별도의 Playwright 브라우저 설치는 필요 없다.
+Issue #9에서 저장 계층 **19개**, Electron 통합 **32개**가 통과했다(건너뜀 없음). GUI가 있는 환경에서는 `npm run test:e2e`로도 실행할 수 있다. `xvfb-run`이 없는 환경은 별도로 Xvfb를 설치해야 한다. Playwright는 설치된 Electron을 사용하므로 별도의 Playwright 브라우저 설치는 필요 없다.
 
 통합 테스트는 Linux에서 Playwright의 기본 설정인 OS 샌드박스 비활성 상태로 실행한다. 샌드박스를 구성한 시스템에서는 `STUDY_DESK_TEST_SANDBOX=1 xvfb-run -a npm run test:e2e`로 활성화할 수 있지만, 이 명령은 현재 컴퓨터에서 통과를 확인하지 않았다.
 
@@ -120,6 +143,8 @@ Issue #7에서 저장 계층 **19개**, Electron 통합 **24개**가 통과했�
 4. 합성 v1/v2 fixture의 ID·제목·내용·시각과 원래 바이트, 독립된 두 복구 사본, 읽기만 할 때 무변경, 첫 이전, v3 새 PID 복원을 확인한다. 사본 작성·원본 교체·권한 오류 뒤 재시작·재시도를 검증한다.
 5. 손상·미지원 버전·잘못된 구조/ID/소속/필드·외부 변경/삭제·항목 수/입력/전체 파일 제한·복구 사본 충돌을 검사한다. 교체 후 동기화 오류는 테스트에서 주입한다. 아이디어 추가 실패 → 전체 저장 성공 → 같은 ID의 재확인 쓰기 실패 → 다음 재시도에서도 원래 두 항목·초안·저장 내용·선택·패널을 유지하는지 확인한다. 다른 문제의 재시도 상태와 별도 저장 후 명시적인 새 추가도 검증한다.
 6. renderer의 `require`·`process` 차단과 `load`·`save`·`create`·`createIdea`만 노출되는지 확인한다. HTML 모양 제목·아이디어는 텍스트로 표시하며, 740px 좁은 창에서 가로 넘침이 없다. 아이디어만 미저장인 앱 종료도 확인하되 OS 대화상자는 반환값을 '돌아가기'로 대체한다.
+7. 실제 키보드로 Enter·Tab/Shift+Tab·괄호·undo/redo·포커스 탈출을 확인하고 키워드 색/줄 번호/대응 괄호도 검사한다. 찾기 다음/이전·특수문자 문자열·한 곳/모두/빈 값 바꾸기·undo·코드 외 영역 분리를 확인한다.
+8. 취소 후 커서·선택·스크롤·이력, 같은 문제의 패널/목록 상호작용, A/B 이력 초기화, 저장 후 dirty/undo·실패 후 위치/이력·재시도, v1/v2/v3 CRLF와 혼합 개행·끝 개행·탭/공백·빈 코드·새 PID를 검사한다. Unicode 입력은 자동 붙여넣기/키 입력이며 직접 한글 IME 검증은 아니다.
 
 통합 검증은 매번 `/tmp/study-desk-e2e-*`를 만들고 끝나면 제거한다. 사용자 기록을 읽거나 수정하지 않는다. 화면 캡처는 `test-results/`에 남는다. 이번에는 패널 열림/닫힘, 세 초안의 미저장 선택창, 권한 실패, 동기화 실패 후 추가 재시도, 740px 좁은 창을 직접 열어 확인했다. 테스트 결과와 캡처는 Git에서 제외한다.
 
@@ -140,9 +165,15 @@ STUDY_DESK_DATA_DIR="$STUDY_DESK_TEST_DIR" npm start -- --no-sandbox
 - `src/preload.cjs`: 고정된 `load()`, `save({id, code, notes, idea: null | {id, body}})`, `create(title)`, `createIdea(problemId, retryIdeaId?)`만 공개. 임의 파일 경로나 IPC 채널을 받지 않는다.
 - `src/store.cjs`: v1/v2/v3 검사·이전, ID 기반 코드·메모·선택 아이디어의 원자적 저장, 복구 사본·백업·외부 변경 감지. renderer에는 파일시스템이나 프로세스 API를 노출하지 않는다.
 - `src/renderer.js`, `src/index.html`, `src/styles.css`: 한국어 편집 화면, 저장·오류·미저장 상태. 외부 스크립트·폰트·네트워크 요청 없음.
+- `src/code-editor.js`: CodeMirror 조합·문서/개행·이력·명령/검색 UI·잠금 어댑터. 테스트는 실제 키보드/클립보드로 편집하며 전체 문서 단언은 가상 스크롤 밖 내용까지 읽는다.
+- `scripts/build.cjs`: 로컬 browser 번들과 라이선스 전문 생성. CSP는 `script-src 'self'`를 유지하고 CodeMirror가 만드는 스타일 태그의 nonce만 `style-src`에 허용한다. `unsafe-inline`/`unsafe-eval`은 허용하지 않는다.
+
+CodeMirror 직접 의존성은 state **6.7.6**, view **6.43.15**, commands **6.11.1**, language **6.13.1**, lang-cpp **6.0.3**, search **6.7.2**, autocomplete **6.20.4**다. autocomplete는 괄호 자동 닫기만 사용하며 자동완성 UI는 켜지 않는다. 빌드용 esbuild는 **0.28.2**다. 모두 MIT이며 실제 번들에 포함되는 전이 패키지의 라이선스도 생성 파일에 모은다. 정확한 직접 버전과 전이 버전/무결성은 lockfile로 고정한다.
+
+확인한 편집기 공식 자료: [C++ 확장과 소스 이전 안내](https://github.com/codemirror/lang-cpp), [이전된 공식 저장소](https://code.haverbeke.berlin/codemirror/lang-cpp), [CodeMirror API](https://codemirror.net/docs/ref/), [Tab 접근성 안내](https://codemirror.net/examples/tab/), [esbuild API](https://esbuild.github.io/api/). CodeMirror 문서 사이트 조회는 403이어서 설치된 공식 패키지의 README·dist/index.d.ts·배포 소스에서 API·개행·잠금·CSP nonce 동작도 확인했다.
 
 구현 시 확인한 공식 문서: [Electron 보안](https://www.electronjs.org/docs/latest/tutorial/security), [preload와 IPC](https://www.electronjs.org/docs/latest/tutorial/ipc), [앱 데이터 경로와 실행 잠금](https://www.electronjs.org/docs/latest/api/app), [Node 파일시스템](https://nodejs.org/api/fs.html), [Playwright Electron](https://playwright.dev/docs/api/class-electron), [Ubuntu AppArmor](https://documentation.ubuntu.com/security/security-features/privilege-restriction/apparmor/).
 
 C++ 실행·채점, AI 대화, 추천, 외부 제출, 검색·삭제·이름 변경·일괄 가져오기는 이번 범위에 포함하지 않는다. 샘플 알고리즘의 정답 여부는 검증하지 않았다. OS sandbox 활성 실행, 직접 한글 IME 입력, OS 네이티브 종료 대화상자의 수동 클릭, 실제 전원 차단은 검증하지 않았다.
 
-이번 결과는 [아이디어 패널 구현 보고서](docs/tasks/007-problem-ideas-report.md)에 기록한다. [문제 목록 보고서](docs/tasks/005-problem-library-report.md)와 [첫 기능 보고서](docs/tasks/001-implementation-report.md)는 당시 결과를 보존한 기록이다. 독립 검토·병합·Issue/보드 완료 처리는 총괄과 검토 담당의 후속 단계다. GitHub CI의 실제 상태는 PR에 따로 기록하며 로컬 성공을 CI 통과로 간주하지 않는다.
+이번 결과는 [C++ 편집기 구현 보고서](docs/tasks/009-cpp-editor-report.md)에 기록한다. [아이디어 패널](docs/tasks/007-problem-ideas-report.md), [문제 목록](docs/tasks/005-problem-library-report.md), [첫 기능](docs/tasks/001-implementation-report.md) 보고서는 당시 결과를 보존한 기록이다. 독립 검토·병합·Issue/보드 완료 처리는 총괄과 검토 담당의 후속 단계다. GitHub CI의 실제 상태는 PR에 따로 기록하며 로컬 성공을 CI 통과로 간주하지 않는다.
