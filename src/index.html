@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'nonce-study-editor-style'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
     <title>Algorithm Study Desk</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="renderer.js" defer></script>
+    <script src="../dist/renderer.js" defer></script>
   </head>
   <body>
     <main>
@@ -32,8 +32,16 @@
       </section>
       <section class="editors" aria-label="학습 내용 편집">
         <div class="editor-panel code-panel">
-          <div class="panel-heading"><label for="code">풀이 코드</label><span>C++</span></div>
-          <textarea id="code" spellcheck="false" aria-describedby="sample-note" disabled></textarea>
+          <div class="panel-heading"><strong>풀이 코드</strong><span>C++</span></div>
+          <div class="code-tools"><button id="code-undo" type="button" disabled>실행 취소</button><button id="code-redo" type="button" disabled>다시 실행</button></div>
+          <details id="code-search"><summary>코드 찾기·바꾸기 (Ctrl+F)</summary>
+            <label>찾을 문자열<input id="code-find" type="text" disabled></label>
+            <label>바꿀 문자열<input id="code-replace" type="text" disabled></label>
+            <div class="search-actions"><button id="find-previous" type="button" disabled>이전 찾기</button><button id="find-next" type="button" disabled>다음 찾기</button><button id="replace-one" type="button" disabled>한 곳 바꾸기</button><button id="replace-all" type="button" disabled>모두 바꾸기</button></div>
+            <p id="search-status" role="status">현재 코드에서 대소문자를 구분해 문자열을 찾습니다.</p>
+          </details>
+          <div id="code"></div>
+          <p id="code-help" class="panel-footer">Tab / Shift+Tab: 공백 4칸 들여쓰기 · Esc 후 2초 안에 Tab: 편집기 밖으로<br>Ctrl+Z: 취소 · Ctrl+Shift+Z / Ctrl+Y: 다시 실행</p>
           <p class="panel-footer" id="sample-note">개인 학습 코드 · 정답 통과 여부는 확인되지 않았습니다.</p>
         </div>
         <div class="editor-panel notes-panel">

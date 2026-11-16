@@ -1,4 +1,4 @@
-const code = document.querySelector('#code');
+import { CodeEditor } from './code-editor.js';
 const notes = document.querySelector('#notes');
 const save = document.querySelector('#save');
 const status = document.querySelector('#status');
@@ -24,6 +24,7 @@ let saveFailed = false;
 let pendingAction = null;
 // Retry a post-rename failure using the returned ID, never a first-line label.
 const pendingIdeaAdds = new Map();
+const code = new CodeEditor(document.querySelector('#code'), refresh);
 
 function activeProblem() { return library.problems.find((problem) => problem.id === selectedId); }
 function activeIdea() { return activeProblem().ideas.find((idea) => idea.id === selectedIdeaId); }
@@ -41,9 +42,10 @@ function showStatus(message, state) {
 function refresh() {
   const disabled = !loaded || Boolean(busy);
   save.disabled = add.disabled = newTitle.disabled = ideasToggle.disabled = ideaAdd.disabled = disabled;
-  code.disabled = notes.disabled = !loaded;
+  code.setLocked(disabled);
+  notes.disabled = !loaded;
   ideaBody.disabled = !loaded || selectedIdeaId === null;
-  code.readOnly = notes.readOnly = ideaBody.readOnly = Boolean(busy);
+  notes.readOnly = ideaBody.readOnly = Boolean(busy);
   for (const button of [...list.querySelectorAll('button'), ...ideaList.querySelectorAll('button')]) button.disabled = disabled;
   ideasPanel.hidden = !panelOpen;
   ideasToggle.textContent = panelOpen ? '아이디어 닫기' : '아이디어 열기';
@@ -111,7 +113,7 @@ function setIdeaFields(id) {
 function showProblem(id, ideaId) {
   selectedId = id;
   const problem = activeProblem();
-  code.value = problem.code;
+  code.show(id, problem.code);
   notes.value = problem.notes;
   setIdeaFields(panelOpen ? (ideaId ?? problem.ideas[0]?.id ?? null) : null);
   baseline = draft();
@@ -217,7 +219,6 @@ document.querySelector('#save-move').addEventListener('click', async () => {
   cancelAction();
   if (action && await persist()) await executeAction(action);
 });
-code.addEventListener('input', refresh);
 notes.addEventListener('input', refresh);
 ideaBody.addEventListener('input', () => { renderIdeas(); refresh(); });
 save.addEventListener('click', persist);
