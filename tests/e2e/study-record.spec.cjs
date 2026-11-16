@@ -591,6 +591,135 @@ test('post-rename idea addition failure keeps drafts and retries the returned ID
   await expect(ideaButtons(restored)).toHaveCount(4);
 });
 
+test('pending idea retry survives full-save success then a second pre-rename failure', async ({}, testInfo) => {
+  let page = await launch();
+  await openIdeas(page);
+  const A1 = await addIdea(page);
+  await editAll(page, 'saved');
+  await save(page);
+  await editAll(page, 'retry boundary 📝');
+  await failNextIdeaSync();
+  await page.locator('#idea-add').click();
+  await page.locator('#discard-move').click();
+  await expect(state(page)).toHaveAttribute('data-state', 'error');
+  await expectAll(page, 'retry boundary 📝', A1);
+  await expect(ideaButtons(page)).toHaveCount(2);
+  const A2 = await ideaButtons(page).nth(1).getAttribute('data-idea-id');
+  await expect(page.locator('#idea-add')).toHaveText('추가 확인 재시도');
+  await app.evaluate((_electron, root) => {
+    const { StudyStore } = process.mainModule.require(`${root}/src/store.cjs`);
+    const write = StudyStore.prototype.writeTemporary;
+    let primaryWrites = 0;
+    StudyStore.prototype.writeTemporary = async function (target, content) {
+      if (target === this.filePath && ++primaryWrites === 2) {
+        StudyStore.prototype.writeTemporary = write;
+        throw Object.assign(new Error('retry write after successful full save'), { code: 'EIO' });
+      }
+      return write.call(this, target, content);
+    };
+  }, root);
+  await page.locator('#idea-add').click();
+  await page.locator('#save-move').click();
+  await expect(state(page)).toHaveAttribute('data-state', 'error');
+  await expect(state(page)).toContainText('아이디어 추가 확인 실패');
+  await expectAll(page, 'retry boundary 📝', A1);
+  await expect(page.locator('#idea-add')).toHaveText('추가 확인 재시도');
+  await expect(ideaButtons(page)).toHaveCount(2);
+  const saved = JSON.parse(await fs.readFile(filename(), 'utf8'));
+  expect(saved.problems[0]).toMatchObject({ code: 'code retry boundary 📝', notes: '자유 메모 retry boundary 📝',
+    ideas: [{ id: A1, body: '아이디어 retry boundary 📝' }, { id: A2, body: '' }] });
+  await page.screenshot({ path: testInfo.outputPath('ideas-retry-second-failure.png'), fullPage: true });
+  await page.locator('#idea-add').click();
+  await expect(ideaSelection(page)).toHaveAttribute('data-idea-id', A2);
+  await expect(ideaButtons(page)).toHaveCount(2);
+  await expect(state(page)).toHaveAttribute('data-state', 'saved');
+  await expectDraft(page, '데이터분석', 'code retry boundary 📝', '자유 메모 retry boundary 📝');
+  await expect(page.locator('#idea-body')).toHaveValue('');
+  await expect(page.locator('#ideas-panel')).toBeVisible();
+  await expect(page.locator('#idea-add')).toHaveText('아이디어 추가');
+  expect(JSON.parse(await fs.readFile(filename(), 'utf8'))).toEqual(saved);
+  await page.screenshot({ path: testInfo.outputPath('ideas-retry-same-item.png'), fullPage: true });
+  page = await restart();
+  await openIdeas(page);
+  await expectAll(page, 'retry boundary 📝', A1);
+  await expect(ideaButtons(page)).toHaveCount(2);
+  expect(JSON.parse(await fs.readFile(filename(), 'utf8'))).toEqual(saved);
+});
+
+async function failNextIdeaSync() {
+  await app.evaluate((_electron, root) => {
+    const { StudyStore } = process.mainModule.require(`${root}/src/store.cjs`);
+    const sync = StudyStore.prototype.syncDirectory;
+    StudyStore.prototype.syncDirectory = async function () {
+      StudyStore.prototype.syncDirectory = sync;
+      throw Object.assign(new Error('post-rename sync failure'), { code: 'EIO' });
+    };
+  }, root);
+}
+
+test('failed retry stays scoped to its problem; a separate save permits explicit new additions', async () => {
+  const page = await launch();
+  await openIdeas(page);
+  const A1 = await addIdea(page);
+  await editAll(page, 'saved A');
+  await save(page);
+  await add(page, 'B');
+  await expect(heading(page)).toHaveText('B');
+  const B1 = await addIdea(page);
+  await edit(page, 'B code', 'B 메모');
+  await page.locator('#idea-body').fill('B 아이디어');
+  await save(page);
+  await problem(page, '데이터분석').click();
+  await failNextIdeaSync();
+  await page.locator('#idea-add').click();
+  await expect(state(page)).toHaveAttribute('data-state', 'error');
+  const A2 = await ideaButtons(page).nth(1).getAttribute('data-idea-id');
+  await problem(page, 'B').click();
+  await failNextIdeaSync();
+  await page.locator('#idea-add').click();
+  await expect(state(page)).toHaveAttribute('data-state', 'error');
+  const B2 = await ideaButtons(page).nth(1).getAttribute('data-idea-id');
+  await problem(page, '데이터분석').click();
+  await expect(page.locator('#idea-add')).toHaveText('추가 확인 재시도');
+  const before = await fs.readFile(filename(), 'utf8');
+  await app.evaluate((_electron, root) => {
+    const { StudyStore } = process.mainModule.require(`${root}/src/store.cjs`);
+    const write = StudyStore.prototype.writeTemporary;
+    StudyStore.prototype.writeTemporary = async function () {
+      StudyStore.prototype.writeTemporary = write;
+      throw Object.assign(new Error('pre-rename retry failure'), { code: 'EIO' });
+    };
+  }, root);
+  await page.locator('#idea-add').click();
+  await expect(state(page)).toHaveAttribute('data-state', 'error');
+  await expectAll(page, 'saved A', A1);
+  await expect(page.locator('#idea-add')).toHaveText('추가 확인 재시도');
+  expect(await fs.readFile(filename(), 'utf8')).toBe(before);
+  await problem(page, 'B').click();
+  await expect(ideaSelection(page)).toHaveAttribute('data-idea-id', B1);
+  await expect(page.locator('#idea-add')).toHaveText('추가 확인 재시도');
+  await page.locator('#idea-add').click();
+  await expect(ideaSelection(page)).toHaveAttribute('data-idea-id', B2);
+  await expect(ideaButtons(page)).toHaveCount(2);
+  await expectDraft(page, 'B', 'B code', 'B 메모');
+  await expect(page.locator('#idea-body')).toHaveValue('');
+  await problem(page, '데이터분석').click();
+  await expectAll(page, 'saved A', A1);
+  await expect(page.locator('#idea-add')).toHaveText('아이디어 추가');
+  await failNextIdeaSync();
+  await page.locator('#idea-add').click();
+  await expect(state(page)).toHaveAttribute('data-state', 'error');
+  const A3 = await ideaButtons(page).nth(2).getAttribute('data-idea-id');
+  await expect(page.locator('#idea-add')).toHaveText('추가 확인 재시도');
+  await save(page); // Separate confirmed save, not an unfinished save-then-retry action.
+  await expect(page.locator('#idea-add')).toHaveText('아이디어 추가');
+  const A4 = await addIdea(page);
+  expect(new Set([A1, A2, A3, A4, B1, B2]).size).toBe(6);
+  const saved = JSON.parse(await fs.readFile(filename(), 'utf8'));
+  expect(saved.problems.map(p => p.ideas.map(i => i.id))).toEqual([[A1, A2, A3, A4], [B1, B2]]);
+  expect(saved.problems[1]).toMatchObject({ code: 'B code', notes: 'B 메모', ideas: [{ id: B1, body: 'B 아이디어' }, { id: B2, body: '' }] });
+});
+
 for (const version of [1, 2]) {
   test(`v${version} ideas migration preserves legacy bytes/times through permission retry and new PID`, async () => {
     test.skip(process.getuid?.() === 0, 'Run as non-root for actual permission errors');

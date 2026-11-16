@@ -178,6 +178,9 @@ async function executeAction(action) {
     if (!isIdea) newTitle.value = '';
     showProblem(result.problemId, result.ideaId);
   } catch (error) {
+    // A preceding full save may clear the map, but this retry action is not done.
+    // Keep its original problem/idea pair even if the retry failed before rename.
+    if (isIdea && action.retryIdeaId) pendingIdeaAdds.set(action.problemId, action.retryIdeaId);
     lastError = `${isIdea ? '아이디어' : '문제'} 추가 확인 실패 · ${error.message} 현재 편집 내용·선택·패널은 유지됩니다.`;
   } finally {
     busy = '';
