@@ -1,6 +1,10 @@
 # 총괄 인수인계
 
-## 현재 상태 — 2026-11-15 첫 기능 인수 완료
+## 최신 운영 참조 — 2026-11-17
+
+현재 기능별 책임과 실제 인수 현황은 [team-owners.md](team-owners.md), 작업 배정·공유 계약·병렬 실행·필수 CI는 [team-workflow.md](team-workflow.md)를 따른다. [Issue #13](https://github.com/dheorb/algorithm-study-desk/issues/13)의 사용자 요청으로 AI 담당 재사용과 별도 코드 편집기 전담 배치가 진행된다. 아래의 두 창 재사용·미구현 기능·런타임 식별자·“현재/다음 행동”은 **해당 시점의 과거 기록**이며 오늘의 배정이나 영구 접속 주소가 아니다. 재개 시 실제 Orca 연결과 Issue의 최신 상태를 확인한다. 최초 인수·실패·로컬 병합 기록은 그대로 보존한다.
+
+## 과거 상태 — 2026-11-15 첫 기능 인수 완료
 
 - 새 총괄은 이 프로젝트의 `main` 작업공간이며 handle은 `term_a50a1ad0-6fd5-4959-a555-d91a289df127`이다. `run-current`와 `run-show --full`로 기존 Run `run_c0ede69f6a2c`의 총괄 연결을 확인했다. 이전 대화 전체를 자동 복제한 것은 아니며 아래 인계 기록을 읽고 이어받았다.
 - 구현 완료: 기존 구현 담당이 `f51e835a73e5c912aa31ecade5db9933846fb9d6`을 보고했다. [구현 보고서](tasks/001-implementation-report.md)를 참고한다.

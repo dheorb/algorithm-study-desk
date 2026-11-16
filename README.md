@@ -4,17 +4,18 @@
 
 ## 현재 기능
 
-문제를 제목으로 추가하고 목록에서 선택해 각 문제의 코드·자유 메모·여러 아이디어를 따로 저장·복원한다. C++ 편집기는 구문 강조·줄 번호·들여쓰기·괄호 편집·undo/redo·문자열 찾기/바꾸기를 제공한다. 코드 옆에서 아이디어 패널을 열고 닫으며 접근 방법을 모아 볼 수 있다. 처음에는 데이터분석 샘플 한 개가 보이며, 새 문제는 빈 코드·메모와 빈 아이디어 목록으로 시작한다. 문제별 AI 대화 패널에서는 Codex에 질문하고 답변을 따로 보관한다. 이번 범위는 [Issue #11](https://github.com/dheorb/algorithm-study-desk/issues/11), 이전 C++ 편집기는 [Issue #9](https://github.com/dheorb/algorithm-study-desk/issues/9), 아이디어 패널은 [Issue #7](https://github.com/dheorb/algorithm-study-desk/issues/7)에 있다.
+문제를 제목으로 추가하고 목록에서 선택해 각 문제의 코드·자유 메모·여러 아이디어를 따로 저장·복원한다. C++ 편집기는 구문 강조·줄 번호·들여쓰기·괄호 편집·undo/redo·문자열 찾기/바꾸기를 제공한다. 코드 옆에서 아이디어 패널을 열고 닫으며 접근 방법을 모아 볼 수 있다. 처음에는 데이터분석 샘플 한 개가 보이며, 새 문제는 빈 코드·메모와 빈 아이디어 목록으로 시작한다. 문제별 AI 대화 패널에서는 Codex에 질문하고 답변을 따로 보관한다. AI 기능 근거는 [Issue #11](https://github.com/dheorb/algorithm-study-desk/issues/11), 이전 C++ 편집기는 [Issue #9](https://github.com/dheorb/algorithm-study-desk/issues/9), 아이디어 패널은 [Issue #7](https://github.com/dheorb/algorithm-study-desk/issues/7)에 있다.
 
 첫 문제는 사용자의 기존 `데이터분석/sol1.cpp`를 복사해 사용한다. 원본은 수정하지 않는다. 문제 설명 원문과 프로그래머스 채점 결과는 포함하지 않는다.
 
 ## 역할
 
 - 총괄: 프로젝트 `main`의 총괄 대화. 작업 정의, 구현·검토 담당 배정, 결과 취합.
-- 구현: 첫 기능 구현과 검증, 실행 방법 작성.
+- AI 대화·코드 편집기: 기능별 전담자가 담당 영역과 공유 계약을 이어받아 구현·검증한다.
+- 학습 데이터·추천 및 앱 기반·실행 자동화: 현재 미배정이며 관련 Issue 착수 때 배치한다.
 - 검토: 요구사항과 실제 동작을 독립적으로 확인하고 수정 필요 사항 보고.
 
-상세 요구사항: [첫 작업](docs/tasks/001-study-record.md)
+현재 책임·실제 작업창/공간·인수 근거는 [담당자 현황](docs/team-owners.md), 병렬 작업과 필요 시 추가 배치는 [Issue #13](https://github.com/dheorb/algorithm-study-desk/issues/13) 및 [팀 운영 규칙](docs/team-workflow.md)을 따른다. [첫 작업](docs/tasks/001-study-record.md)은 초기 범위 기록이다.
 
 ## 팀의 작업 진행 보기
 
