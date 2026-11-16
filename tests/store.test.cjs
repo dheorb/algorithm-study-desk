@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { StudyStore, MAX_CODE, MAX_TITLE } = require('../src/store.cjs');
+const { StudyStore, MAX_CODE, MAX_TITLE, MAX_IDEAS, MAX_IDEA_BODY } = require('../src/store.cjs');
 
 const A = 'data-analysis';
 const legacyRecord = { schemaVersion: 1, problemId: A, code: '// 이전 코드\n', notes: '기존 한글 메모 📝', savedAt: '2025-04-03T12:34:56.789+09:00' };
@@ -46,13 +46,13 @@ test('v1 read is byte-preserving; first addition migrates all values and pins or
   const { directory, store } = await fixture(t);
   await fs.writeFile(store.filePath, legacyBytes);
   const loaded = await store.load();
-  assert.deepEqual(entry(loaded), { id: A, title: '데이터분석', code: legacyRecord.code, notes: legacyRecord.notes, savedAt: legacyRecord.savedAt });
+  assert.deepEqual(entry(loaded), { id: A, title: '데이터분석', code: legacyRecord.code, notes: legacyRecord.notes, savedAt: legacyRecord.savedAt, ideas: [] });
   assert.deepEqual(await bytes(store), legacyBytes);
   assert.deepEqual(await fs.readdir(directory), ['study-record.json']);
   const added = await store.create('새 문제');
   assert.equal(added.ok, true);
   assert.deepEqual(entry(added), entry(loaded));
-  assert.equal(JSON.parse(await bytes(store)).schemaVersion, 2);
+  assert.equal(JSON.parse(await bytes(store)).schemaVersion, 3);
   assert.deepEqual(await fs.readFile(store.legacyBackupPath), legacyBytes);
   for (const notes of ['새 메모', '또 다른 메모']) {
     assert.equal((await store.save({ id: added.problemId, code: '', notes })).ok, true);
@@ -242,4 +242,188 @@ test('aggregate serialized size cannot produce a file that is too large to reope
   assert.equal(failed.ok, false);
   assert.match(failed.message, /8 MiB/);
   assert.deepEqual(await bytes(store), original);
+});
+
+const { randomUUID } = require('node:crypto');
+const core = ({ ideas, ...problem }) => problem;
+
+test('A/B ideas with identical first lines and blank bodies use stable IDs and atomic three-field saves', async (t) => {
+  const { directory, store } = await fixture(t);
+  await store.load();
+  const B = (await store.create('B')).problemId;
+  const A1 = (await store.createIdea(A)).ideaId;
+  const A2 = (await store.createIdea(A)).ideaId;
+  const B1 = (await store.createIdea(B)).ideaId;
+  const B2 = (await store.createIdea(B)).ideaId;
+  assert.equal(new Set([A1, A2, B1, B2]).size, 4);
+  const savedA = await store.save({ id: A, code: 'A code', notes: 'A 자유 메모', idea: { id: A1, body: '같은 첫 줄\nA 아이디어 📝' } });
+  assert.equal(savedA.ok, true);
+  await store.save({ id: A, code: 'A code', notes: 'A 자유 메모', idea: { id: A2, body: '같은 첫 줄\n다른 생각' } });
+  await store.save({ id: B, code: 'B code', notes: 'B 자유 메모', idea: { id: B1, body: 'B 아이디어 한글' } });
+  await store.save({ id: B, code: 'B code', notes: 'B 자유 메모', idea: { id: B2, body: '' } });
+  const before = await bytes(store);
+  const wrongOwner = await store.save({ id: A, code: 'must not change', notes: 'must not change', idea: { id: B1, body: 'wrong owner' } });
+  assert.equal(wrongOwner.ok, false);
+  assert.deepEqual(await bytes(store), before);
+  const restarted = await new StudyStore(directory, '// fallback').load();
+  assert.deepEqual(core(entry(restarted)), core(entry(savedA)));
+  assert.deepEqual(entry(restarted).ideas.map(idea => [idea.id, idea.body]), [[A1, '같은 첫 줄\nA 아이디어 📝'], [A2, '같은 첫 줄\n다른 생각']]);
+  assert.deepEqual(entry(restarted, B).ideas.map(idea => [idea.id, idea.body]), [[B1, 'B 아이디어 한글'], [B2, '']]);
+  assert.equal(entry(restarted, B).notes, 'B 자유 메모');
+});
+
+test('v1/v2 idea migration retains existing values/timestamps, exact recovery bytes, and prior v1 backup', async (t) => {
+  for (const version of [1, 2]) {
+    const { directory, store } = await fixture(t);
+    const secondId = randomUUID();
+    const originalProblems = [
+      { id: A, title: '데이터분석', code: legacyRecord.code, notes: legacyRecord.notes, savedAt: legacyRecord.savedAt },
+      { id: secondId, title: '빈 기록', code: '', notes: '', savedAt: null }
+    ];
+    const fixtureRecord = version === 1 ? legacyRecord : { schemaVersion: 2, problems: originalProblems };
+    const raw = Buffer.from(`\r\n ${JSON.stringify(fixtureRecord, null, '\t')} \r\n`);
+    await fs.writeFile(store.filePath, raw);
+    if (version === 2) await fs.writeFile(store.legacyBackupPath, legacyBytes);
+    const loaded = await store.load();
+    assert.equal(loaded.ok, true);
+    assert.deepEqual(await bytes(store), raw);
+    assert.deepEqual(loaded.library.problems.map(core), version === 1 ? originalProblems.slice(0, 1) : originalProblems);
+    const added = await store.createIdea(A);
+    const idea = { id: added.ideaId, body: '첫 아이디어\n한글 📝' };
+    assert.equal(added.ok, true);
+    const saved = await store.save({ id: A, code: legacyRecord.code, notes: legacyRecord.notes, idea });
+    assert.equal(saved.ok, true);
+    assert.equal(entry(saved).savedAt, legacyRecord.savedAt);
+    assert.ok(entry(saved).ideas[0].savedAt);
+    if (version === 2) {
+      const emptyIdea = await store.createIdea(secondId);
+      await store.save({ id: secondId, code: '', notes: '', idea: { id: emptyIdea.ideaId, body: '' } });
+      assert.equal(entry(await store.load(), secondId).savedAt, null);
+      assert.deepEqual(await fs.readFile(store.legacyBackupPath), legacyBytes);
+    }
+    const recovered = await new StudyStore(directory, '// sample').load();
+    assert.deepEqual(recovered.library.problems.map(core), version === 1 ? originalProblems.slice(0, 1) : originalProblems);
+    assert.equal(entry(recovered).ideas[0].body, idea.body);
+    const backup = version === 1 ? store.legacyBackupPath : store.v2BackupPath;
+    assert.deepEqual(await fs.readFile(backup), raw);
+    assert.equal(JSON.parse(await bytes(store)).schemaVersion, 3);
+  }
+});
+
+test('v2 idea migration refuses conflicting recovery and survives failed primary replacement before retry', async (t) => {
+  const { directory, store } = await fixture(t);
+  const raw = Buffer.from(JSON.stringify({ schemaVersion: 2, problems: [{ id: A, title: '데이터분석', code: 'original', notes: '', savedAt: legacyRecord.savedAt }] }));
+  await fs.writeFile(store.filePath, raw);
+  await fs.writeFile(store.v2BackupPath, 'conflicting recovery');
+  await fs.writeFile(store.legacyBackupPath, legacyBytes);
+  await store.load();
+  assert.equal((await store.createIdea(A)).ok, false);
+  assert.deepEqual(await bytes(store), raw);
+  assert.equal(await fs.readFile(store.v2BackupPath, 'utf8'), 'conflicting recovery');
+  // Preserve the conflicting fixture separately, as documented, before retrying.
+  await fs.rename(store.v2BackupPath, `${store.v2BackupPath}.separate`);
+  const rename = fs.rename;
+  const failure = t.mock.method(fs, 'rename', async (source, target) => {
+    if (target === store.filePath) throw Object.assign(new Error('rename failure'), { code: 'EIO' });
+    return rename(source, target);
+  });
+  assert.equal((await store.createIdea(A)).ok, false);
+  assert.deepEqual(await bytes(store), raw);
+  assert.deepEqual(await fs.readFile(store.v2BackupPath), raw);
+  failure.mock.restore();
+  const reopened = new StudyStore(directory, '// fallback');
+  await reopened.load();
+  const retried = await reopened.createIdea(A);
+  assert.equal(retried.ok, true);
+  assert.equal(entry(retried).ideas.length, 1);
+  assert.deepEqual(await fs.readFile(store.legacyBackupPath), legacyBytes);
+  assert.deepEqual(await fs.readFile(store.v2BackupPath), raw);
+});
+
+test('malformed v3 ideas and duplicate IDs are rejected without replacing the file', async (t) => {
+  const { directory, store } = await fixture(t);
+  const valid = { id: randomUUID(), body: '', savedAt: null };
+  const problem = { id: A, title: '데이터분석', code: '', notes: '', savedAt: null, ideas: [] };
+  const invalidLists = [undefined, null, {}, [null], [{ body: '', savedAt: null }], [{ ...valid, id: A }], [valid, valid],
+    [{ ...valid, body: null }], [{ ...valid, body: 'x'.repeat(MAX_IDEA_BODY + 1) }], [{ ...valid, savedAt: 'not a time' }],
+    Array.from({ length: MAX_IDEAS + 1 }, () => ({ ...valid, id: randomUUID() }))];
+  const cases = invalidLists.map(ideas => ({ schemaVersion: 3, problems: [{ ...problem, ideas }] }));
+  cases.push({ schemaVersion: 3, problems: [{ ...problem, ideas: [valid] }, { ...problem, id: randomUUID(), title: 'B', ideas: [valid] }] });
+  for (const record of cases) {
+    const raw = Buffer.from(JSON.stringify(record));
+    await fs.writeFile(store.filePath, raw);
+    const reopened = new StudyStore(directory, 'sample');
+    assert.equal((await reopened.load()).ok, false);
+    assert.equal((await reopened.createIdea(A)).ok, false);
+    assert.equal((await reopened.save({ id: A, code: '', notes: '', idea: valid })).ok, false);
+    assert.deepEqual(await bytes(store), raw);
+  }
+});
+
+test('idea payload/count bounds and unknown or foreign retry IDs leave the library intact', async (t) => {
+  const { directory, store } = await fixture(t);
+  await store.load();
+  const B = (await store.create('B')).problemId;
+  const ideaId = (await store.createIdea(A)).ideaId;
+  const before = await bytes(store);
+  for (const idea of [false, { id: 'unknown', body: '' }, { id: ideaId, body: null }, { id: ideaId, body: 'x'.repeat(MAX_IDEA_BODY + 1) }]) {
+    assert.equal((await store.save({ id: A, code: '', notes: '', idea })).ok, false);
+  }
+  assert.equal((await store.createIdea('unknown')).ok, false);
+  assert.equal((await store.createIdea(B, ideaId)).ok, false);
+  assert.equal((await store.createIdea(A, randomUUID())).ok, false);
+  assert.deepEqual(await bytes(store), before);
+  const record = JSON.parse(before);
+  record.problems[0].ideas = Array.from({ length: MAX_IDEAS }, () => ({ id: randomUUID(), body: '', savedAt: null }));
+  await fs.writeFile(store.filePath, JSON.stringify(record));
+  const full = new StudyStore(directory, 'sample');
+  assert.equal((await full.load()).ok, true);
+  const fullBytes = await bytes(store);
+  assert.equal((await full.createIdea(A)).ok, false);
+  assert.deepEqual(await bytes(store), fullBytes);
+});
+
+test('post-rename idea creation returns its ID and retries that item without deduplicating by body', async (t) => {
+  const { store } = await fixture(t);
+  await store.load();
+  const firstId = (await store.createIdea(A)).ideaId;
+  const sync = store.syncDirectory.bind(store);
+  store.syncDirectory = async () => { throw Object.assign(new Error('sync failure'), { code: 'EIO' }); };
+  const failed = await store.createIdea(A);
+  assert.equal(failed.ok, false);
+  assert.ok(failed.ideaId);
+  assert.equal(entry(failed).ideas.length, 2);
+  assert.notEqual(failed.ideaId, firstId);
+  assert.equal((await store.createIdea(A, failed.ideaId)).ok, false);
+  assert.equal(JSON.parse(await bytes(store)).problems[0].ideas.length, 2);
+  store.syncDirectory = sync;
+  const retried = await store.createIdea(A, failed.ideaId);
+  assert.equal(retried.ok, true);
+  assert.equal(retried.ideaId, failed.ideaId);
+  assert.equal(entry(retried).ideas.length, 2);
+  assert.equal(entry(await store.createIdea(A)).ideas.length, 3);
+});
+
+test('three-field snapshot is captured before delayed I/O and rejects concurrent idea creation', async (t) => {
+  const { store } = await fixture(t);
+  await store.load();
+  const ideaId = (await store.createIdea(A)).ideaId;
+  const write = store.writeTemporary.bind(store);
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  store.writeTemporary = async (...args) => { await gate; return write(...args); };
+  const snapshot = { id: A, code: 'captured code', notes: 'captured notes', idea: { id: ideaId, body: 'captured idea' } };
+  const saving = store.save(snapshot);
+  snapshot.idea.body = 'later mutation';
+  assert.equal((await store.createIdea(A)).ok, false);
+  release();
+  const result = await saving;
+  assert.equal(result.ok, true);
+  assert.equal(entry(result).code, 'captured code');
+  assert.equal(entry(result).notes, 'captured notes');
+  assert.equal(entry(result).ideas[0].body, 'captured idea');
+  await fs.writeFile(store.filePath, 'external change');
+  assert.equal((await store.createIdea(A)).ok, false);
+  assert.equal((await store.save({ id: A, code: '', notes: '', idea: { id: ideaId, body: '' } })).ok, false);
+  assert.equal(await fs.readFile(store.filePath, 'utf8'), 'external change');
 });

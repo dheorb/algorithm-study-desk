@@ -60,6 +60,10 @@ if (!app.requestSingleInstanceLock()) {
       if (!trusted(event)) return { ok: false, message: '허용되지 않은 요청입니다.' };
       return store.create(title);
     });
+    ipcMain.handle('study:create-idea', (event, problemId, retryIdeaId) => {
+      if (!trusted(event)) return { ok: false, message: '허용되지 않은 요청입니다.' };
+      return store.createIdea(problemId, retryIdeaId);
+    });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event) => event.preventDefault());
     window.webContents.on('will-attach-webview', (event) => event.preventDefault());
@@ -68,7 +72,7 @@ if (!app.requestSingleInstanceLock()) {
     window.webContents.on('will-prevent-unload', (event) => {
       const choice = dialog.showMessageBoxSync(window, {
         type: 'warning', title: '저장하지 않은 변경 사항',
-        message: '아직 저장하지 않은 코드와 메모가 있습니다.',
+        message: '아직 저장하지 않은 코드·메모·아이디어가 있습니다.',
         detail: '편집을 계속하려면 돌아가기를 선택하세요. 저장 중이라면 완료될 때까지 기다려 주세요.',
         buttons: ['돌아가기', '저장하지 않고 닫기'], defaultId: 0, cancelId: 0, noLink: true
       });
