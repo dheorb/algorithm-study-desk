@@ -88,4 +88,10 @@ STUDY_DESK_DATA_DIR="$STUDY_DESK_TEST_DIR" npm start -- --no-sandbox
 - CDP의 insertText로 구문 색이 있는 선택 영역을 한 번에 교체할 때 Chromium이 색상 인라인 스타일을 보존하려다 기존 CSP에 차단되는 진단을 관찰했다. CSP를 완화하지 않았고 실제 키보드/일반 텍스트 클립보드 붙여넣기로 검증했다. 이 자동 입력 진단을 일반 IME 동작으로 확대 해석하지 않는다.
 - 실제 전원 차단·하드웨어 오류·외부 프로그램과의 모든 쓰기 경쟁은 미확인이다. 사용자 실제 앱 데이터·원본 학습 폴더·인증 파일은 읽거나 수정하지 않았다.
 - CodeMirror 문서/이력·검색 상태는 실행 중 메모리에만 있다. 이력 앱 재실행 복원, 자동완성/LSP, 컴파일/실행/채점, AI, 외부 서비스/배포는 이번 범위 밖이다.
-- 최신 head 독립 실제 검토·필요한 수정·정상 병합·Issue/Projects 완료는 총괄이 조율한다. GitHub CI는 실제 run/check 결과를 PR에 기록하며 #4 임시 예외와 로컬 성공을 CI 통과로 표현하지 않는다.
+- 최신 head 독립 실제 검토·필요한 수정·정상 병합·Issue/Projects 완료는 총괄이 조율한다. #4의 임시 예외는 종료됐으며 최신 head의 필수 `unit-tests` 통과가 필요하다. GitHub CI는 실제 run/check 결과를 PR에 기록하고 로컬 성공과 구분한다.
+
+## CI 보호 복구에 따른 문서 후속 갱신
+
+2026-11-16 총괄은 제출 head `0f239793d3c46ea04934b315b1cbb2e98d7fd67b`의 [CI run 43837068177 / job 133196238511](https://github.com/dheorb/algorithm-study-desk/actions/runs/43837068177/job/133196238511)에서 실제 npm ci/npm test success를 확인했다. [Issue #4](https://github.com/dheorb/algorithm-study-desk/issues/4)에 따라 main의 필수 검사를 `strict: true`, `unit-tests`, app ID `15368`로 복구하고 다른 전체 보호 필드가 동일함을 API로 확인했다. CI 없는 병합 예외는 이미 종료됐다.
+
+후속 구현 작업은 AGENTS·팀 규칙·README·이 보고서의 현재 운영 상태만 갱신했다. 제공된 공개 before/after 감사 파일에서도 required_status_checks 이외의 필드가 동일함을 비교했다. 제품·테스트·CI workflow·보호 설정은 변경하지 않았고 과거 PR #3/#6/#8의 실패 기록을 바꾸지 않았다. 문서 diff 검사만 수행했으며 위 19/32 로컬 테스트는 제품 제출 head의 기존 실행 근거다. 문서 커밋으로 바뀐 최신 head의 CI 실제 상태는 PR 본문에서 별도로 구분한다. 최종 CI·독립 검토·정상 병합과 #4/#9 완료는 총괄의 후속 단계다.

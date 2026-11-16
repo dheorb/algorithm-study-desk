@@ -27,6 +27,8 @@
 
 GitHub Actions의 `unit-tests`는 저장 계층 테스트만 실행한다. 앱 화면과 재시작 동작은 관련 변경의 PR에서 별도 통합 검증 근거를 남긴다.
 
+2026-11-16 [Issue #4](https://github.com/dheorb/algorithm-study-desk/issues/4)의 main 필수 CI 보호 조건 복구로 임시 예외가 종료됐다. 현재는 최신 PR head의 `unit-tests` 통과와 독립 검토를 확인하고 병합한다. 복구 근거와 종료된 예외 기록은 [팀 운영 규칙](docs/team-workflow.md)에 있다.
+
 ## 설치와 실행
 
 2026-11-16에 Ubuntu 26.04.1 LTS, Node **22.22.1**, npm **9.2.0**, Electron **45.3.2**, Playwright **1.65.1**에서 확인했다. Node 22.12 이상이 필요하다. 버전은 `package-lock.json`에 고정되어 있다.
